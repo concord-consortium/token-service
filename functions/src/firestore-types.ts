@@ -1,5 +1,7 @@
 export type FireStoreResourceType = "s3Folder" | "iotOrganization";
-export type FireStoreResourceTool = "glossary" | "rubric" | "dataFlow";
+export type FireStoreResourceTool = FireStoreS3ResourceTool | FireStoreIotOrganizationResourceTool;
+export type FireStoreS3ResourceTool = "glossary" | "rubric";
+export type FireStoreIotOrganizationResourceTool = "dataFlow";
 export type FireStoreAccessRuleType = "user" | "context";
 export type FireStoreAccessRuleRole = "owner" | "member";
 
@@ -19,17 +21,37 @@ export interface FireStoreContextAccessRule {
   contextId: string;
 }
 
-export interface FireStoreResource {
+export type FireStoreResource = FireStoreS3Resource | FireStoreIotOrganizationResource;
+
+export interface FireStoreBaseResource {
   name: string;
   description: string;
-  type: FireStoreResourceType;
-  tool: FireStoreResourceTool;
-  url: string;
   accessRules: FireStoreAccessRule[]
+}
+
+export interface FireStoreS3Resource extends FireStoreBaseResource {
+  type: "s3Folder";
+  tool: FireStoreS3ResourceTool;
+  bucket: string;
+  folder: string;
+}
+
+export interface FireStoreIotOrganizationResource extends FireStoreBaseResource {
+  type: "iotOrganization";
+  tool: FireStoreIotOrganizationResourceTool;
 }
 
 export interface JWTClaims {
   userId: string;
   platformId: string;
   contextId?: string;
+}
+
+export type FireStoreResourceSettings = FireStoreS3ResourceSettings;
+
+export interface FireStoreS3ResourceSettings {
+  type: "s3Folder";
+  tool: FireStoreResourceTool;
+  bucket: string;
+  folder: string;
 }
