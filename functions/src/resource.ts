@@ -2,9 +2,12 @@ import { FireStoreResourceType, FireStoreResourceTool, JWTClaims, FireStoreResou
          FireStoreAccessRule, FireStoreAccessRuleType, FireStoreAccessRuleRole,
          FireStoreContextAccessRule, FireStoreUserAccessRule, FireStoreBaseResource,
          FireStoreS3Resource, FireStoreResourceSettings } from "./firestore-types";
+import { STS } from "aws-sdk";
 
 const RESOURCE_COLLECTION_ID = 'resources';
 const RESOURCE_SETTINGS_COLLECTION_ID = 'resourceSettings';
+
+const TEMPORARY_S3_CREDENTIALS_DURATION = 60*60;
 
 interface FindAllQuery {
   name?: string;
@@ -26,22 +29,11 @@ type UpdateQuery = Omit<Omit<PartialFireStoreResource, 'type'>, 'tool'>;
 type S3UpdateQuery = Omit<Omit<PartialS3FireStoreResource, 'type'>, 'tool'>;
 
 interface AWSTemporaryCredentials {
-  AccessKeyId: string;
-  Expiration: string;
-  SecretAccessKey: string;
-  SessionToken: string;
+  accessKeyId: string;
+  expiration: Date;
+  secretAccessKey: string;
+  sessionToken: string;
 }
-
-/*
-interface AWSAssumeRoleResponse {
-  AssumedRoleUser: {
-    Arn: string;
-    AssumedRoleId: string;
-  },
-  Credentials: AWSTemporaryCredentials;
-  PackedPolicySize: number;
-}
-*/
 
 export class Resource implements FireStoreBaseResource {
   id: string;
@@ -75,25 +67,6 @@ export class Resource implements FireStoreBaseResource {
     return this.hasUserRole(claims, "owner");
   }
 
-  canCreateKeys(claims: JWTClaims): boolean {
-    switch (this.type) {
-      case "s3Folder":
-        return this.isOwner(claims);
-
-      case "iotOrganization":
-        // TODO: figure out permissions
-        break;
-    }
-
-    return false;
-  }
-
-  createKeys() {
-    return new Promise<AWSTemporaryCredentials>((resolve, reject) => {
-      reject("TODO: add S3 call: ");
-    });
-  }
-
   static GetResourceSettings(db: FirebaseFirestore.Firestore, type: FireStoreResourceType, tool: FireStoreResourceTool) {
     return new Promise<FireStoreResourceSettings>((resolve, reject) => {
       return db.collection(RESOURCE_SETTINGS_COLLECTION_ID).where("type", "==", type).where("tool", "==", tool).get()
@@ -123,7 +96,7 @@ export class Resource implements FireStoreBaseResource {
   }
 
   static Find(db: FirebaseFirestore.Firestore, id: string) {
-    return new Promise<Resource>((resolve, reject) => {
+    return new Promise<AnyResource>((resolve, reject) => {
       return db.collection(RESOURCE_COLLECTION_ID).doc(id).get()
               .then((docSnapshot) => {
                 if (docSnapshot.exists) {
@@ -138,7 +111,7 @@ export class Resource implements FireStoreBaseResource {
   }
 
   static FindAll(db: FirebaseFirestore.Firestore, claims: JWTClaims, query: FindAllQuery) {
-    return new Promise<Resource[]>((resolve, reject) => {
+    return new Promise<AnyResource[]>((resolve, reject) => {
       const {name, type, tool, amOwner} = query;
       const checkForOwner = amOwner === 'true';
       const collectionRef = db.collection(RESOURCE_COLLECTION_ID);
@@ -150,7 +123,7 @@ export class Resource implements FireStoreBaseResource {
 
       return (whereQuery || collectionRef).get()
         .then((querySnapshot) => {
-          const resources: Resource[] = [];
+          const resources: AnyResource[] = [];
           querySnapshot.forEach((docSnapshot) => {
             const resource = Resource.FromDocumentSnapshot(docSnapshot);
             if (!checkForOwner || resource.isOwner(claims)) {
@@ -164,7 +137,7 @@ export class Resource implements FireStoreBaseResource {
   }
 
   static Create(db: FirebaseFirestore.Firestore, claims: JWTClaims, query: CreateQuery) {
-    return new Promise<Resource>((resolve, reject) => {
+    return new Promise<AnyResource>((resolve, reject) => {
       const {name, description, type, tool, accessRuleType, accessRuleRole} = query;
       if (!name || !description || !type || !tool || !accessRuleType || !accessRuleRole) {
         reject("One or more missing resource fields!");
@@ -233,7 +206,7 @@ export class Resource implements FireStoreBaseResource {
   }
 
   static Update(db: FirebaseFirestore.Firestore, claims: JWTClaims, id: string, query: UpdateQuery) {
-    return new Promise<Resource>((resolve, reject) => {
+    return new Promise<AnyResource>((resolve, reject) => {
       const docRef = db.collection(RESOURCE_COLLECTION_ID).doc(id);
       return docRef.get()
         .then((docSnapshot) => {
@@ -301,8 +274,89 @@ export class S3Resource extends Resource {
     this.bucket = doc.bucket;
     this.folder = doc.folder;
   }
+
+  canCreateKeys(claims: JWTClaims): boolean {
+    switch (this.type) {
+      case "s3Folder":
+        return this.isOwner(claims);
+
+      case "iotOrganization":
+        // TODO: figure out permissions
+        break;
+    }
+
+    return false;
+  }
+
+  createKeys() {
+    return new Promise<AWSTemporaryCredentials>((resolve, reject) => {
+      reject("TODO: ran out of time to test before vacation!")
+      return;
+
+      // get template
+      const { bucket, folder, id } = this;
+      const durationSeconds = TEMPORARY_S3_CREDENTIALS_DURATION;
+      const roleArn = "TODO";
+
+      const policy = JSON.stringify({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "AllowAllS3ActionsInResourceFolder",
+                "Action": [
+                    "s3:*"
+                ],
+                "Effect": "Allow",
+                "Resource": [
+                    `arn:aws:s3:::${bucket}/${folder}/${id}/*`
+                ]
+            }
+        ]
+      });
+
+      // call assume role
+      const sts = new STS();
+      const params: STS.AssumeRoleRequest = {
+        DurationSeconds: durationSeconds,
+        // ExternalId: // not needed
+        Policy: policy,
+        RoleArn: roleArn,
+        RoleSessionName: `token-service-${this.type}-${this.tool}-${this.id}`
+      };
+      sts.assumeRole(params, (err, data) => {
+        if (err) {
+          reject(err);
+        }
+        else if (!data.Credentials) {
+          reject(`Missing credentials in AWS STS assume role response!`)
+        }
+        else {
+          const {AccessKeyId, Expiration, SecretAccessKey, SessionToken} = data.Credentials;
+          resolve({
+            accessKeyId: AccessKeyId,
+            expiration: Expiration,
+            secretAccessKey: SecretAccessKey,
+            sessionToken: SessionToken
+          });
+        }
+      })
+    });
+  }
 }
 
 export class IotResource extends Resource {
   // TODO: add iot specific resource members
+
+  canCreateKeys(claims: JWTClaims): boolean {
+    // TODO: figure out permissions
+    return false;
+  }
+
+  createKeys() {
+    return new Promise<AWSTemporaryCredentials>((resolve, reject) => {
+      reject(`TODO: implement create keys`);
+    })
+  }
 }
+
+export type AnyResource = S3Resource | IotResource;
