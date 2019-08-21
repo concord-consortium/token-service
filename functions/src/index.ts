@@ -3,7 +3,7 @@ import * as admin from 'firebase-admin';
 import * as express from 'express';
 import * as bodyParser from 'body-parser';
 import * as cors from 'cors';
-import { Resource } from './resource';
+import { Resource, Config } from './resource';
 import { JWTClaims } from './firestore-types';
 
 // insert custom data and handlers in type declarations
@@ -13,7 +13,7 @@ declare global {
       claims: JWTClaims;
     }
     interface Response {
-      success: (data: any) => Response
+      success: (data: any, code?: number) => Response
       error: (code: number, error: any) => Response
     }
   }
@@ -32,9 +32,9 @@ main.use('/api/v1', apiV1);
 
 // create custom api response handlers
 const customHandlers = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  res.success = (result: any) => {
+  res.success = (result: any, code: number = 200) => {
     result.status = 'success';
-    return res.status(200).json(result);
+    return res.status(code).json(result);
   }
   res.error = (code: number, error: any) => res.status(code).json({status: 'error', error: error.toString()});
   next();
@@ -96,6 +96,44 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
 main.use(checkAuth);
 apiV1.use(checkAuth);
 
+const getValidatedConfig = () => {
+  return new Promise<Config>((resolve, reject) => {
+    const config = functions.config() as Config;
+    if (!config.aws) {
+      reject("Missing aws object in config!");
+      return;
+    }
+    if (!config.aws.key) {
+      reject("Missing aws.key in config!");
+      return;
+    }
+    if (!config.aws.secret) {
+      reject("Missing aws.secret in config!");
+      return;
+    }
+    if (!config.aws.s3credentials) {
+      reject("Missing aws.s3credentials object in config!");
+      return;
+    }
+    if (!config.aws.s3credentials.rolearn) {
+      reject("Missing aws.s3credentials.rolearn in config!");
+      return;
+    }
+    if (!config.aws.s3credentials.duration) {
+      reject("Missing aws.s3credentials.duration in config!");
+      return;
+    }
+    // configs are stored as strings but we want duration as a number
+    const duration = parseInt(config.aws.s3credentials.duration as unknown as string, 10);
+    if (isNaN(duration)) {
+      reject("aws.s3credentials.duration is not convertable to an integer!");
+      return;
+    }
+    config.aws.s3credentials.duration = duration;
+    resolve(config);
+  })
+}
+
 apiV1.get('/resources', (req, res) => {
   return Resource.FindAll(db, req.claims, req.query)
     .then(resources => resources.map(resource => resource.sanitizeApiResult(req.method)))
@@ -113,7 +151,7 @@ apiV1.get('/resources/:id', (req, res) => {
 apiV1.post('/resources', (req, res) => {
   return Resource.Create(db, req.claims, req.body)
     .then(resource => resource.sanitizeApiResult(req.method))
-    .then(sanitizedResource => res.success(sanitizedResource))
+    .then(sanitizedResource => res.success(sanitizedResource, 201))
     .catch(error => res.error(400, error))
 })
 
@@ -125,9 +163,10 @@ apiV1.patch('/resources/:id', (req, res) => {
 })
 
 apiV1.post('/resources/:id/aws-keys', (req, res) => {
-  return Resource.CreateAWSKeys(db, req.claims, req.params.id)
-    .then(awsTemporaryCredentials => res.success(awsTemporaryCredentials))
-    .catch(error => res.error(400, error))
+  return getValidatedConfig()
+          .then((config) => Resource.CreateAWSKeys(db, req.claims, req.params.id, config))
+          .then(awsTemporaryCredentials => res.success(awsTemporaryCredentials))
+          .catch(error => res.error(400, error))
 })
 
 export const webApiV1 = functions.https.onRequest(main);

@@ -7,7 +7,16 @@ import { STS } from "aws-sdk";
 const RESOURCE_COLLECTION_ID = 'resources';
 const RESOURCE_SETTINGS_COLLECTION_ID = 'resourceSettings';
 
-const TEMPORARY_S3_CREDENTIALS_DURATION = 60*60;
+export interface Config {
+  aws: {
+    key: string;
+    secret: string;
+    s3credentials: {
+      rolearn: string;
+      duration: number;
+    }
+  }
+};
 
 interface FindAllQuery {
   name?: string;
@@ -33,6 +42,8 @@ interface AWSTemporaryCredentials {
   expiration: Date;
   secretAccessKey: string;
   sessionToken: string;
+  bucket: string;
+  keyPrefix: string;
 }
 
 export class Resource implements FireStoreBaseResource {
@@ -246,12 +257,12 @@ export class Resource implements FireStoreBaseResource {
     });
   }
 
-  static CreateAWSKeys(db: FirebaseFirestore.Firestore, claims: JWTClaims, id: string) {
+  static CreateAWSKeys(db: FirebaseFirestore.Firestore, claims: JWTClaims, id: string, config: Config) {
     return new Promise<AWSTemporaryCredentials>((resolve, reject) => {
       return Resource.Find(db, id)
         .then((resource) => {
           if (resource.canCreateKeys(claims)) {
-            return resource.createKeys()
+            return resource.createKeys(config)
               .then(resolve)
               .catch(reject)
           }
@@ -288,15 +299,10 @@ export class S3Resource extends Resource {
     return false;
   }
 
-  createKeys() {
+  createKeys(config: Config) {
     return new Promise<AWSTemporaryCredentials>((resolve, reject) => {
-      reject("TODO: ran out of time to test before vacation!")
-      return;
-
-      // get template
       const { bucket, folder, id } = this;
-      const durationSeconds = TEMPORARY_S3_CREDENTIALS_DURATION;
-      const roleArn = "TODO";
+      const keyPrefix = `${folder}/${id}/`
 
       const policy = JSON.stringify({
         "Version": "2012-10-17",
@@ -308,19 +314,19 @@ export class S3Resource extends Resource {
                 ],
                 "Effect": "Allow",
                 "Resource": [
-                    `arn:aws:s3:::${bucket}/${folder}/${id}/*`
+                    `arn:aws:s3:::${bucket}/${keyPrefix}/*`
                 ]
             }
         ]
       });
 
       // call assume role
-      const sts = new STS();
+      const sts = new STS({accessKeyId: config.aws.key, secretAccessKey: config.aws.secret});
       const params: STS.AssumeRoleRequest = {
-        DurationSeconds: durationSeconds,
+        DurationSeconds: config.aws.s3credentials.duration,
         // ExternalId: // not needed
         Policy: policy,
-        RoleArn: roleArn,
+        RoleArn: config.aws.s3credentials.rolearn,
         RoleSessionName: `token-service-${this.type}-${this.tool}-${this.id}`
       };
       sts.assumeRole(params, (err, data) => {
@@ -336,7 +342,9 @@ export class S3Resource extends Resource {
             accessKeyId: AccessKeyId,
             expiration: Expiration,
             secretAccessKey: SecretAccessKey,
-            sessionToken: SessionToken
+            sessionToken: SessionToken,
+            bucket,
+            keyPrefix
           });
         }
       })
