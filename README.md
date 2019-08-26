@@ -50,7 +50,7 @@ Optional PATCH body parameters:
 
 Returns a 200 status code with a single resource that was updated.  Any errors are returned with a 400 status code.
 
-### `POST /api/v1/resources/:id/aws-keys`
+### `POST /api/v1/resources/:id/credentials`
 
 No parameters.
 

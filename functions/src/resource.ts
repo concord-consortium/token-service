@@ -1,58 +1,20 @@
-import { FireStoreResourceType, FireStoreResourceTool, JWTClaims, FireStoreResource,
-         FireStoreAccessRule, FireStoreAccessRuleType, FireStoreAccessRuleRole,
-         FireStoreContextAccessRule, FireStoreUserAccessRule, FireStoreBaseResource,
-         FireStoreS3Resource, FireStoreResourceSettings } from "./firestore-types";
+import { JWTClaims, FireStoreResource, FireStoreS3Resource, FireStoreResourceSettings} from "./firestore-types";
+import { ResourceType, ResourceTool, AccessRule, AccessRuleRole, ContextAccessRule, UserAccessRule,
+         FindAllQuery, CreateQuery, UpdateQuery, S3UpdateQuery, S3ResourceQuery, Credentials, Config,
+         BaseResource, IotResource} from "./resource-types";
 import { STS } from "aws-sdk";
 
 const RESOURCE_COLLECTION_ID = 'resources';
 const RESOURCE_SETTINGS_COLLECTION_ID = 'resourceSettings';
 
-export interface Config {
-  aws: {
-    key: string;
-    secret: string;
-    s3credentials: {
-      rolearn: string;
-      duration: number;
-    }
-  }
-};
 
-interface FindAllQuery {
-  name?: string;
-  type?: FireStoreResourceType;
-  tool?: FireStoreResourceTool;
-  amOwner: 'true' | 'false';
-}
-
-// mark all resource fields as optional so we get type checking
-type PartialFireStoreResource = Partial<FireStoreResource>;
-type PartialS3FireStoreResource = Partial<FireStoreS3Resource>;
-
-interface CreateQuery extends Omit<PartialFireStoreResource, 'url'> {
-  accessRuleType: FireStoreAccessRuleType;
-  accessRuleRole: FireStoreAccessRuleRole;
-}
-
-type UpdateQuery = Omit<Omit<PartialFireStoreResource, 'type'>, 'tool'>;
-type S3UpdateQuery = Omit<Omit<PartialS3FireStoreResource, 'type'>, 'tool'>;
-
-interface AWSTemporaryCredentials {
-  accessKeyId: string;
-  expiration: Date;
-  secretAccessKey: string;
-  sessionToken: string;
-  bucket: string;
-  keyPrefix: string;
-}
-
-export class Resource implements FireStoreBaseResource {
+export class BaseResourceObject implements BaseResource {
   id: string;
   name: string;
   description: string;
-  type: FireStoreResourceType;
-  tool: FireStoreResourceTool;
-  accessRules: FireStoreAccessRule[]
+  type: ResourceType;
+  tool: ResourceTool;
+  accessRules: AccessRule[]
 
   constructor (id: string, doc: FireStoreResource) {
     this.id = id;
@@ -63,12 +25,12 @@ export class Resource implements FireStoreBaseResource {
     this.accessRules = doc.accessRules;
   }
 
-  sanitizeApiResult(method: string): Resource {
-    // nothing for now but placeholder if we don't want to expose some resource attributes
-    return this;
+  apiResult(): BaseResource {
+    const {id, name, description, type, tool, accessRules} = this;
+    return {id, name, description, type, tool, accessRules};
   }
 
-  hasUserRole(claims: JWTClaims, role: FireStoreAccessRuleRole): boolean {
+  hasUserRole(claims: JWTClaims, role: AccessRuleRole): boolean {
     return !!this.accessRules.find((accessRule) => {
       return (accessRule.type === "user") && (accessRule.role === role) && (accessRule.userId === claims.userId)  && (accessRule.platformId === claims.platformId);
     })
@@ -78,7 +40,7 @@ export class Resource implements FireStoreBaseResource {
     return this.hasUserRole(claims, "owner");
   }
 
-  static GetResourceSettings(db: FirebaseFirestore.Firestore, type: FireStoreResourceType, tool: FireStoreResourceTool) {
+  static GetResourceSettings(db: FirebaseFirestore.Firestore, type: ResourceType, tool: ResourceTool) {
     return new Promise<FireStoreResourceSettings>((resolve, reject) => {
       return db.collection(RESOURCE_SETTINGS_COLLECTION_ID).where("type", "==", type).where("tool", "==", tool).get()
         .then((querySnapshot) => {
@@ -98,20 +60,20 @@ export class Resource implements FireStoreBaseResource {
     switch (data.type) {
       case "s3Folder":
         // tslint:disable-next-line: no-use-before-declare
-        return new S3Resource(doc.id, data);
+        return new S3ResourceObject(doc.id, data);
 
       case "iotOrganization":
         // tslint:disable-next-line: no-use-before-declare
-        return new IotResource(doc.id, data);
+        return new IotResourceObject(doc.id, data);
     }
   }
 
   static Find(db: FirebaseFirestore.Firestore, id: string) {
-    return new Promise<AnyResource>((resolve, reject) => {
+    return new Promise<ResourceObject>((resolve, reject) => {
       return db.collection(RESOURCE_COLLECTION_ID).doc(id).get()
               .then((docSnapshot) => {
                 if (docSnapshot.exists) {
-                  resolve(Resource.FromDocumentSnapshot(docSnapshot));
+                  resolve(BaseResourceObject.FromDocumentSnapshot(docSnapshot));
                 }
                 else {
                   reject(`Resource ${id} not found!`);
@@ -122,7 +84,7 @@ export class Resource implements FireStoreBaseResource {
   }
 
   static FindAll(db: FirebaseFirestore.Firestore, claims: JWTClaims, query: FindAllQuery) {
-    return new Promise<AnyResource[]>((resolve, reject) => {
+    return new Promise<ResourceObject[]>((resolve, reject) => {
       const {name, type, tool, amOwner} = query;
       const checkForOwner = amOwner === 'true';
       const collectionRef = db.collection(RESOURCE_COLLECTION_ID);
@@ -134,9 +96,9 @@ export class Resource implements FireStoreBaseResource {
 
       return (whereQuery || collectionRef).get()
         .then((querySnapshot) => {
-          const resources: AnyResource[] = [];
+          const resources: ResourceObject[] = [];
           querySnapshot.forEach((docSnapshot) => {
-            const resource = Resource.FromDocumentSnapshot(docSnapshot);
+            const resource = BaseResourceObject.FromDocumentSnapshot(docSnapshot);
             if (!checkForOwner || resource.isOwner(claims)) {
               resources.push(resource);
             }
@@ -148,7 +110,7 @@ export class Resource implements FireStoreBaseResource {
   }
 
   static Create(db: FirebaseFirestore.Firestore, claims: JWTClaims, query: CreateQuery) {
-    return new Promise<AnyResource>((resolve, reject) => {
+    return new Promise<ResourceObject>((resolve, reject) => {
       const {name, description, type, tool, accessRuleType, accessRuleRole} = query;
       if (!name || !description || !type || !tool || !accessRuleType || !accessRuleRole) {
         reject("One or more missing resource fields!");
@@ -162,10 +124,10 @@ export class Resource implements FireStoreBaseResource {
         }
 
         const accessRules = accessRuleType === "context"
-          ? [{type: "context", role: accessRuleRole, contextId, platformId}] as FireStoreContextAccessRule[]
-          : [{type: "user", role: accessRuleRole, userId, platformId}] as FireStoreUserAccessRule[];
+          ? [{type: "context", role: accessRuleRole, contextId, platformId}] as ContextAccessRule[]
+          : [{type: "user", role: accessRuleRole, userId, platformId}] as UserAccessRule[];
 
-        return Resource.GetResourceSettings(db, type, tool)
+        return BaseResourceObject.GetResourceSettings(db, type, tool)
           .then((settings) => {
             let newResource: FireStoreResource;
             switch (type) {
@@ -174,7 +136,7 @@ export class Resource implements FireStoreBaseResource {
                   reject(`Unknown s3Folder tool: ${tool}`);
                   return;
                 }
-                const {bucket, folder} = settings;
+                const {bucket, folder, region} = settings;
                 newResource = {
                   type: "s3Folder",
                   tool,
@@ -182,7 +144,8 @@ export class Resource implements FireStoreBaseResource {
                   description,
                   accessRules,
                   bucket,
-                  folder
+                  folder,
+                  region
                 }
                 break;
 
@@ -207,7 +170,7 @@ export class Resource implements FireStoreBaseResource {
 
             return db.collection(RESOURCE_COLLECTION_ID).add(newResource)
               .then((docRef) => docRef.get())
-              .then((docSnapshot) => Resource.FromDocumentSnapshot(docSnapshot))
+              .then((docSnapshot) => BaseResourceObject.FromDocumentSnapshot(docSnapshot))
               .then(resolve)
               .catch(reject)
           })
@@ -217,13 +180,13 @@ export class Resource implements FireStoreBaseResource {
   }
 
   static Update(db: FirebaseFirestore.Firestore, claims: JWTClaims, id: string, query: UpdateQuery) {
-    return new Promise<AnyResource>((resolve, reject) => {
+    return new Promise<ResourceObject>((resolve, reject) => {
       const docRef = db.collection(RESOURCE_COLLECTION_ID).doc(id);
       return docRef.get()
         .then((docSnapshot) => {
           if (docSnapshot.exists) {
 
-            const resource = Resource.FromDocumentSnapshot(docSnapshot);
+            const resource = BaseResourceObject.FromDocumentSnapshot(docSnapshot);
             if (resource.isOwner(claims)) {
               const {name, description, accessRules} = query;
               const update: UpdateQuery = {};
@@ -233,14 +196,14 @@ export class Resource implements FireStoreBaseResource {
 
               if (resource.type === "s3Folder") {
                 const s3Query: S3UpdateQuery = query as S3UpdateQuery;
-                const s3Update: PartialS3FireStoreResource = update as PartialS3FireStoreResource;
+                const s3Update: S3ResourceQuery = update as S3ResourceQuery;
                 if (s3Query.bucket) s3Update.bucket = s3Query.bucket;
                 if (s3Query.folder) s3Update.folder = s3Query.folder;
               }
 
               return docRef.update(update)
                       .then(() => docRef.get())
-                      .then((updatedDocSnapshot) => Resource.FromDocumentSnapshot(updatedDocSnapshot))
+                      .then((updatedDocSnapshot) => BaseResourceObject.FromDocumentSnapshot(updatedDocSnapshot))
                       .then(resolve)
                       .catch(reject)
             }
@@ -258,8 +221,8 @@ export class Resource implements FireStoreBaseResource {
   }
 
   static CreateAWSKeys(db: FirebaseFirestore.Firestore, claims: JWTClaims, id: string, config: Config) {
-    return new Promise<AWSTemporaryCredentials>((resolve, reject) => {
-      return Resource.Find(db, id)
+    return new Promise<Credentials>((resolve, reject) => {
+      return BaseResourceObject.Find(db, id)
         .then((resource) => {
           if (resource.canCreateKeys(claims)) {
             return resource.createKeys(config)
@@ -276,31 +239,32 @@ export class Resource implements FireStoreBaseResource {
   }
 }
 
-export class S3Resource extends Resource {
+export class S3ResourceObject extends BaseResourceObject {
   bucket: string;
   folder: string;
+  region: string;
 
   constructor (id: string, doc: FireStoreS3Resource) {
     super(id, doc);
     this.bucket = doc.bucket;
     this.folder = doc.folder;
+    this.region = doc.region;
+  }
+
+  apiResult(): S3ResourceObject {
+    const result = super.apiResult() as S3ResourceObject;
+    result.bucket = this.bucket;
+    result.folder = this.folder;
+    result.region = this.region;
+    return result;
   }
 
   canCreateKeys(claims: JWTClaims): boolean {
-    switch (this.type) {
-      case "s3Folder":
-        return this.isOwner(claims);
-
-      case "iotOrganization":
-        // TODO: figure out permissions
-        break;
-    }
-
-    return false;
+    return this.isOwner(claims);
   }
 
   createKeys(config: Config) {
-    return new Promise<AWSTemporaryCredentials>((resolve, reject) => {
+    return new Promise<Credentials>((resolve, reject) => {
       const { bucket, folder, id } = this;
       const keyPrefix = `${folder}/${id}/`
 
@@ -308,13 +272,28 @@ export class S3Resource extends Resource {
         "Version": "2012-10-17",
         "Statement": [
             {
+              "Sid": "AllowBucketAccess",
+              "Effect": "Allow",
+              "Action": [
+                  "s3:ListBucket",
+                  "s3:ListBucketVersions"
+              ],
+              "Resource": [
+                  `arn:aws:s3:::${bucket}`
+              ]
+            },
+            {
                 "Sid": "AllowAllS3ActionsInResourceFolder",
                 "Action": [
-                    "s3:*"
+                  "s3:DeleteObject",
+                  "s3:DeleteObjectVersion",
+                  "s3:GetObject",
+                  "s3:GetObjectVersion",
+                  "s3:PutObject"
                 ],
                 "Effect": "Allow",
                 "Resource": [
-                    `arn:aws:s3:::${bucket}/${keyPrefix}/*`
+                    `arn:aws:s3:::${bucket}/${keyPrefix}*`
                 ]
             }
         ]
@@ -352,8 +331,14 @@ export class S3Resource extends Resource {
   }
 }
 
-export class IotResource extends Resource {
+export class IotResourceObject extends BaseResourceObject {
   // TODO: add iot specific resource members
+
+  apiResult() {
+    const result = super.apiResult() as IotResource;
+    // TODO: add superclass members to return
+    return result;
+  }
 
   canCreateKeys(claims: JWTClaims): boolean {
     // TODO: figure out permissions
@@ -361,10 +346,10 @@ export class IotResource extends Resource {
   }
 
   createKeys() {
-    return new Promise<AWSTemporaryCredentials>((resolve, reject) => {
+    return new Promise<Credentials>((resolve, reject) => {
       reject(`TODO: implement create keys`);
     })
   }
 }
 
-export type AnyResource = S3Resource | IotResource;
+export type ResourceObject = S3ResourceObject | IotResourceObject;
