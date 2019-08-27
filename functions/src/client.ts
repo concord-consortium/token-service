@@ -32,6 +32,10 @@ export class TokenServiceClient {
     this.serviceUrl = serviceUrl || (env === Env.DEV ? DEV_SERVICE_URL : (env === Env.STAGING ? STAGING_SERVICE_URL : PRODUCTION_SERVICE_URL));
   }
 
+  static get FirebaseAppName() {
+    return "token-service";
+  }
+
   listResources(options: FindAllQuery) {
     return new Promise<Resource[]>((resolve, reject) => {
       return this.fetch("GET", this.url("/", options))

@@ -7,6 +7,7 @@ export declare class TokenServiceClient {
     private jwt;
     private serviceUrl;
     constructor(options: TokenServiceClientOptions);
+    static readonly FirebaseAppName: string;
     listResources(options: FindAllQuery): Promise<Resource[]>;
     getResource(resourceId: string): Promise<Resource>;
     createResource(options: CreateQuery): Promise<Resource>;

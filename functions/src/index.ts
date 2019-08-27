@@ -6,6 +6,7 @@ import * as cors from 'cors';
 import { BaseResourceObject } from './resource';
 import { Config } from './resource-types';
 import { JWTClaims } from './firestore-types';
+import { verify } from 'jsonwebtoken';
 
 // insert custom data and handlers in type declarations
 declare global {
@@ -58,52 +59,17 @@ main.use(bodyParser.json());
 main.use(bodyParser.urlencoded({ extended: false }));
 main.use(cors());
 
-// check authorization token
-const checkAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-
-  let token: string | null = null;
-  if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
-    token = req.headers.authorization.split(' ')[1];
-  } else if (req.query && req.query.token) {
-    token = req.query.token;
-  } else if (req.cookies && req.cookies.token) {
-    token = req.cookies.token;
-  }
-
-  if (token) {
-    if (token !== "test") {
-      res.error(400, "Invalid token!");
-      return;
-    }
-
-    /*
-    admin
-      .auth()
-      .verifyIdToken(token)
-      .then((decodedToken) => {
-        req.claims = decodedToken.claims;
-        next();
-      })
-      .catch(error => res.error(403, error))
-    */
-
-    req.claims = {
-      userId: "testUserId",
-      platformId: "testPlatformId",
-      contextId: "testContextId"
-    };
-    next();
-  }
-  else {
-    res.error(400, "Missing token in headers, query or cookie");
-  }
-};
-main.use(checkAuth);
-apiV1.use(checkAuth);
-
 const getValidatedConfig = () => {
   return new Promise<Config>((resolve, reject) => {
     const config = functions.config() as Config;
+    if (!config.admin) {
+      reject("Missing admin object in config!");
+      return;
+    }
+    if (!config.admin.public_key) {
+      reject("Missing admin.public_key in config!");
+      return;
+    }
     if (!config.aws) {
       reject("Missing aws object in config!");
       return;
@@ -138,6 +104,62 @@ const getValidatedConfig = () => {
     resolve(config);
   })
 }
+
+// check authorization token
+const checkAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+
+  let token: string | undefined = undefined;
+  if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.query && req.query.token) {
+    token = req.query.token;
+  } else if (req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  }
+
+  getValidatedConfig()
+    .then((config) => {
+      if (!token) {
+        res.error(400, "Missing token in headers, query or cookie");
+      }
+      else if (token === "test") {
+        req.claims = {
+          user_id: "http://example.com/users/test",
+          platform_user_id: "test",
+          platform_id: "http://example.com",
+          context_id: "testContextId"
+        };
+        next();
+      }
+      else {
+        const public_key = config.admin.public_key.split("\\n").join("\n");
+        verify(token, public_key, {algorithms: ["RS256"]}, (error, decoded: any) => {
+          if (error) {
+            res.error(403, error);
+          }
+          else {
+            const claims = decoded.claims as JWTClaims;
+            if (!claims.user_id) {
+              res.error(403, "Missing user_id in JWT claims!");
+            }
+            if (!claims.platform_user_id) {
+              res.error(403, "Missing platform_user_id in JWT claims!");
+            }
+            if (!claims.platform_id) {
+              res.error(403, "Missing platform_id in JWT claims!");
+            }
+            // context_id is optional so don't test for it
+            // TODO: context_id is still "class_hash" rigse jwt_controller.rb - should it be class_hash here?
+            req.claims = claims;
+            next();
+          }
+        })
+      }
+    })
+    .catch(error => res.error(403, error))
+};
+main.use(checkAuth);
+apiV1.use(checkAuth);
 
 apiV1.get('/resources', (req, res) => {
   return BaseResourceObject.FindAll(db, req.claims, req.query)

@@ -32,12 +32,16 @@ export class BaseResourceObject implements BaseResource {
 
   hasUserRole(claims: JWTClaims, role: AccessRuleRole): boolean {
     return !!this.accessRules.find((accessRule) => {
-      return (accessRule.type === "user") && (accessRule.role === role) && (accessRule.userId === claims.userId)  && (accessRule.platformId === claims.platformId);
+      return (accessRule.type === "user") && (accessRule.role === role) && (accessRule.userId === claims.user_id)  && (accessRule.platformId === claims.platform_id);
     })
   }
 
   isOwner(claims: JWTClaims): boolean {
     return this.hasUserRole(claims, "owner");
+  }
+
+  isOwnerOrMember(claims: JWTClaims): boolean {
+    return this.hasUserRole(claims, "owner") || this.hasUserRole(claims, "member");
   }
 
   static GetResourceSettings(db: FirebaseFirestore.Firestore, type: ResourceType, tool: ResourceTool) {
@@ -117,7 +121,7 @@ export class BaseResourceObject implements BaseResource {
         return;
       }
       else {
-        const {userId, platformId, contextId} = claims;
+        const {platform_user_id: userId, platform_id: platformId, context_id: contextId} = claims;
         if ((accessRuleType === "context") && !contextId) {
           reject("Missing context_id claim in JWT!");
           return;
@@ -260,7 +264,7 @@ export class S3ResourceObject extends BaseResourceObject {
   }
 
   canCreateKeys(claims: JWTClaims): boolean {
-    return this.isOwner(claims);
+    return this.isOwnerOrMember(claims);
   }
 
   createKeys(config: Config) {

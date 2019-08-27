@@ -20,8 +20,9 @@ export interface FireStoreS3ResourceSettings {
 }
 
 export interface JWTClaims {
-  userId: string;
-  platformId: string;
-  contextId?: string;
+  platform_user_id: string;
+  platform_id: string | number;
+  user_id: string | number;
+  context_id?: string;
 }
 
