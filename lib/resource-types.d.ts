@@ -1,4 +1,7 @@
 export interface Config {
+    admin: {
+        public_key: string;
+    };
     aws: {
         key: string;
         secret: string;

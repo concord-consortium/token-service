@@ -7,6 +7,12 @@ import { STS } from "aws-sdk";
 const RESOURCE_COLLECTION_ID = 'resources';
 const RESOURCE_SETTINGS_COLLECTION_ID = 'resourceSettings';
 
+const getResourceCollection = (db: FirebaseFirestore.Firestore, env: string) => {
+  return db.collection(`${env}:${RESOURCE_COLLECTION_ID}`);
+};
+const getResourceSettingsCollection = (db: FirebaseFirestore.Firestore, env: string) => {
+  return db.collection(`${env}:${RESOURCE_SETTINGS_COLLECTION_ID}`);
+};
 
 export class BaseResourceObject implements BaseResource {
   id: string;
@@ -31,6 +37,10 @@ export class BaseResourceObject implements BaseResource {
   }
 
   hasUserRole(claims: JWTClaims, role: AccessRuleRole): boolean {
+    console.log("------------------");
+    console.log("CLAIMS", claims);
+    console.log("role", role);
+    console.log("this.accessRules", this.accessRules);
     return !!this.accessRules.find((accessRule) => {
       return (accessRule.type === "user") && (accessRule.role === role) && (accessRule.userId === claims.user_id)  && (accessRule.platformId === claims.platform_id);
     })
@@ -44,9 +54,9 @@ export class BaseResourceObject implements BaseResource {
     return this.hasUserRole(claims, "owner") || this.hasUserRole(claims, "member");
   }
 
-  static GetResourceSettings(db: FirebaseFirestore.Firestore, type: ResourceType, tool: ResourceTool) {
+  static GetResourceSettings(db: FirebaseFirestore.Firestore, env: string, type: ResourceType, tool: ResourceTool) {
     return new Promise<FireStoreResourceSettings>((resolve, reject) => {
-      return db.collection(RESOURCE_SETTINGS_COLLECTION_ID).where("type", "==", type).where("tool", "==", tool).get()
+      return getResourceSettingsCollection(db, env).where("type", "==", type).where("tool", "==", tool).get()
         .then((querySnapshot) => {
           if (querySnapshot.empty) {
             reject(`No resource settings for ${type} type with ${tool} tool`)
@@ -72,9 +82,9 @@ export class BaseResourceObject implements BaseResource {
     }
   }
 
-  static Find(db: FirebaseFirestore.Firestore, id: string) {
+  static Find(db: FirebaseFirestore.Firestore, env: string, id: string) {
     return new Promise<ResourceObject>((resolve, reject) => {
-      return db.collection(RESOURCE_COLLECTION_ID).doc(id).get()
+      return getResourceCollection(db, env).doc(id).get()
               .then((docSnapshot) => {
                 if (docSnapshot.exists) {
                   resolve(BaseResourceObject.FromDocumentSnapshot(docSnapshot));
@@ -87,11 +97,11 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static FindAll(db: FirebaseFirestore.Firestore, claims: JWTClaims, query: FindAllQuery) {
+  static FindAll(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, query: FindAllQuery) {
     return new Promise<ResourceObject[]>((resolve, reject) => {
       const {name, type, tool, amOwner} = query;
       const checkForOwner = amOwner === 'true';
-      const collectionRef = db.collection(RESOURCE_COLLECTION_ID);
+      const collectionRef = getResourceCollection(db, env);
       let whereQuery : FirebaseFirestore.Query | null = null;
 
       if (name) whereQuery = (whereQuery || collectionRef).where("name", "==", name);
@@ -113,7 +123,7 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static Create(db: FirebaseFirestore.Firestore, claims: JWTClaims, query: CreateQuery) {
+  static Create(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, query: CreateQuery) {
     return new Promise<ResourceObject>((resolve, reject) => {
       const {name, description, type, tool, accessRuleType, accessRuleRole} = query;
       if (!name || !description || !type || !tool || !accessRuleType || !accessRuleRole) {
@@ -121,7 +131,7 @@ export class BaseResourceObject implements BaseResource {
         return;
       }
       else {
-        const {platform_user_id: userId, platform_id: platformId, context_id: contextId} = claims;
+        const {user_id: userId, platform_id: platformId, context_id: contextId} = claims;
         if ((accessRuleType === "context") && !contextId) {
           reject("Missing context_id claim in JWT!");
           return;
@@ -131,7 +141,7 @@ export class BaseResourceObject implements BaseResource {
           ? [{type: "context", role: accessRuleRole, contextId, platformId}] as ContextAccessRule[]
           : [{type: "user", role: accessRuleRole, userId, platformId}] as UserAccessRule[];
 
-        return BaseResourceObject.GetResourceSettings(db, type, tool)
+        return BaseResourceObject.GetResourceSettings(db, env, type, tool)
           .then((settings) => {
             let newResource: FireStoreResource;
             switch (type) {
@@ -172,7 +182,7 @@ export class BaseResourceObject implements BaseResource {
                 return;
             }
 
-            return db.collection(RESOURCE_COLLECTION_ID).add(newResource)
+            return getResourceCollection(db, env).add(newResource)
               .then((docRef) => docRef.get())
               .then((docSnapshot) => BaseResourceObject.FromDocumentSnapshot(docSnapshot))
               .then(resolve)
@@ -183,9 +193,9 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static Update(db: FirebaseFirestore.Firestore, claims: JWTClaims, id: string, query: UpdateQuery) {
+  static Update(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, id: string, query: UpdateQuery) {
     return new Promise<ResourceObject>((resolve, reject) => {
-      const docRef = db.collection(RESOURCE_COLLECTION_ID).doc(id);
+      const docRef = getResourceCollection(db, env).doc(id);
       return docRef.get()
         .then((docSnapshot) => {
           if (docSnapshot.exists) {
@@ -224,9 +234,9 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static CreateAWSKeys(db: FirebaseFirestore.Firestore, claims: JWTClaims, id: string, config: Config) {
+  static CreateAWSKeys(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, id: string, config: Config) {
     return new Promise<Credentials>((resolve, reject) => {
-      return BaseResourceObject.Find(db, id)
+      return BaseResourceObject.Find(db, env, id)
         .then((resource) => {
           if (resource.canCreateKeys(claims)) {
             return resource.createKeys(config)

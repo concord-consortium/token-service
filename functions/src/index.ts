@@ -13,6 +13,7 @@ declare global {
   namespace Express {
     interface Request {
       claims: JWTClaims;
+      env: string;
     }
     interface Response {
       success: (data: any, code?: number) => Response
@@ -161,34 +162,47 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
 main.use(checkAuth);
 apiV1.use(checkAuth);
 
+const checkEnv = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const {env} = req.query;
+  if (!env) {
+    res.error(403, "Missing env query parameter!");
+  }
+  else {
+    req.env = env;
+    next();
+  }
+};
+main.use(checkEnv);
+apiV1.use(checkEnv);
+
 apiV1.get('/resources', (req, res) => {
-  return BaseResourceObject.FindAll(db, req.claims, req.query)
+  return BaseResourceObject.FindAll(db, req.env, req.claims, req.query)
     .then(resources => resources.map((resource) => resource.apiResult()))
     .then(apiResults => res.success(apiResults))
     .catch(error => res.error(400, error))
 })
 
 apiV1.get('/resources/:id', (req, res) => {
-  return BaseResourceObject.Find(db, req.params.id)
+  return BaseResourceObject.Find(db, req.env, req.params.id)
     .then(resource => res.success(resource.apiResult()))
     .catch(error => res.error(404, error))
 })
 
 apiV1.post('/resources', (req, res) => {
-  return BaseResourceObject.Create(db, req.claims, req.body)
+  return BaseResourceObject.Create(db, req.env, req.claims, req.body)
     .then(resource => res.success(resource.apiResult(), 201))
     .catch(error => res.error(400, error))
 })
 
 apiV1.patch('/resources/:id', (req, res) => {
-  return BaseResourceObject.Update(db, req.claims, req.params.id, req.body)
+  return BaseResourceObject.Update(db, req.env, req.claims, req.params.id, req.body)
     .then(resource => res.success(resource.apiResult()))
     .catch(error => res.error(400, error))
 })
 
 apiV1.post('/resources/:id/credentials', (req, res) => {
   return getValidatedConfig()
-          .then((config) => BaseResourceObject.CreateAWSKeys(db, req.claims, req.params.id, config))
+          .then((config) => BaseResourceObject.CreateAWSKeys(db, req.env, req.claims, req.params.id, config))
           .then(awsTemporaryCredentials => res.success(awsTemporaryCredentials))
           .catch(error => res.error(400, error))
 })

@@ -4,16 +4,16 @@ const DEV_SERVICE_URL = "http://localhost:5000/api/v1/resources";
 const STAGING_SERVICE_URL = "?";
 const PRODUCTION_SERVICE_URL = "?";
 
-enum Env {DEV, STAGING, PRODUCTION}
+enum Env {DEV = "dev", STAGING = "staging", PRODUCTION = "production"}
 const getEnv = (): Env => {
   const {host} = window.location;
-  if (host.match(/localhost|app\./)) {
-    return Env.DEV;
-  }
   if (host.match(/staging\./)) {
     return Env.STAGING;
   }
-  return Env.PRODUCTION;
+  if (host.match(/concord\.org/)) {
+    return Env.PRODUCTION;
+  }
+  return Env.DEV;
 }
 const env = getEnv();
 
@@ -46,7 +46,7 @@ export class TokenServiceClient {
 
   getResource(resourceId: string) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("GET", `/${resourceId}`)
+      return this.fetch("GET", this.url(`/${resourceId}`))
         .then(resolve)
         .catch(reject)
     })
@@ -54,7 +54,7 @@ export class TokenServiceClient {
 
   createResource(options: CreateQuery) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("POST", "/", options)
+      return this.fetch("POST", this.url("/"), options)
         .then(resolve)
         .catch(reject)
     })
@@ -62,7 +62,7 @@ export class TokenServiceClient {
 
   updateResource(resourceId: string, options: UpdateQuery) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("PATCH", `/${resourceId}`, options)
+      return this.fetch("PATCH", this.url(`/${resourceId}`), options)
         .then(resolve)
         .catch(reject)
     })
@@ -70,7 +70,7 @@ export class TokenServiceClient {
 
   getCredentials(resourceId: string) {
     return new Promise<Credentials>((resolve, reject) => {
-      return this.fetch("POST", `/${resourceId}/credentials`)
+      return this.fetch("POST", this.url(`/${resourceId}/credentials`))
         .then(resolve)
         .catch(reject)
     })
@@ -91,7 +91,8 @@ export class TokenServiceClient {
     return `https://${bucket}.s3.amazonaws.com/${path}`;
   }
 
-  private url(root: string, query: any) {
+  private url(root: string, query: any = {}) {
+    query.env = env;
     const keyValues = Object.keys(query)
       .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(query[k])}`)
       .join('&');
