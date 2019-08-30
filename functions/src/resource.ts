@@ -1,6 +1,6 @@
 import { JWTClaims, FireStoreResource, FireStoreS3Resource, FireStoreResourceSettings} from "./firestore-types";
 import { ResourceType, ResourceTool, AccessRule, AccessRuleRole, ContextAccessRule, UserAccessRule,
-         FindAllQuery, CreateQuery, UpdateQuery, S3UpdateQuery, S3ResourceQuery, Credentials, Config,
+         FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
          BaseResource, IotResource} from "./resource-types";
 import { STS } from "aws-sdk";
 
@@ -34,6 +34,18 @@ export class BaseResourceObject implements BaseResource {
   apiResult(): BaseResource {
     const {id, name, description, type, tool, accessRules} = this;
     return {id, name, description, type, tool, accessRules};
+  }
+
+  canCreateKeys(claims: JWTClaims): boolean {
+    // need to override in subclasses
+    return false;
+  }
+
+  createKeys(config: Config) {
+    // need to override in subclasses
+    return new Promise<Credentials>((resolve, reject) => {
+      reject(`Implement createKeys in subclass`);
+    })
   }
 
   hasUserRole(claims: JWTClaims, role: AccessRuleRole): boolean {
@@ -208,13 +220,6 @@ export class BaseResourceObject implements BaseResource {
               if (description) update.description = description;
               if (accessRules) update.accessRules = accessRules;
 
-              if (resource.type === "s3Folder") {
-                const s3Query: S3UpdateQuery = query as S3UpdateQuery;
-                const s3Update: S3ResourceQuery = update as S3ResourceQuery;
-                if (s3Query.bucket) s3Update.bucket = s3Query.bucket;
-                if (s3Query.folder) s3Update.folder = s3Query.folder;
-              }
-
               return docRef.update(update)
                       .then(() => docRef.get())
                       .then((updatedDocSnapshot) => BaseResourceObject.FromDocumentSnapshot(updatedDocSnapshot))
@@ -359,7 +364,7 @@ export class IotResourceObject extends BaseResourceObject {
     return false;
   }
 
-  createKeys() {
+  createKeys(config: Config) {
     return new Promise<Credentials>((resolve, reject) => {
       reject(`TODO: implement create keys`);
     })
