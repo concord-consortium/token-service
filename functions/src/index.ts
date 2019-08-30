@@ -28,10 +28,7 @@ admin.firestore().settings({
 })
 const db = admin.firestore();
 
-const apiV1 = express();
-const main = express();
-
-main.use('/api/v1', apiV1);
+const app = express();
 
 // create custom api response handlers
 const customHandlers = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -41,7 +38,7 @@ const customHandlers = (req: express.Request, res: express.Response, next: expre
       result
     });
   }
-  res.error = (code: number, error: any) => res.status(code).json({status: 'error', error: error.toString()});
+  res.error = (code: number, error: any) => res.status(code).json({ status: 'error', error: error.toString() });
   next();
 };
 
@@ -49,16 +46,6 @@ const genericErrorHandler = (err: any, req: express.Request, res: express.Respon
   console.error("genericErrorHandler");
   res.error(500, err);
 };
-
-main.use(customHandlers);
-apiV1.use(customHandlers);
-main.use(genericErrorHandler);
-apiV1.use(genericErrorHandler);
-apiV1.use(cors());
-
-main.use(bodyParser.json());
-main.use(bodyParser.urlencoded({ extended: false }));
-main.use(cors());
 
 const getValidatedConfig = () => {
   return new Promise<Config>((resolve, reject) => {
@@ -134,7 +121,7 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
       }
       else {
         const public_key = config.admin.public_key.split("\\n").join("\n");
-        verify(token, public_key, {algorithms: ["RS256"]}, (error, decoded: any) => {
+        verify(token, public_key, { algorithms: ["RS256"] }, (error, decoded: any) => {
           if (error) {
             res.error(403, error);
           }
@@ -159,11 +146,16 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
     })
     .catch(error => res.error(403, error))
 };
-main.use(checkAuth);
-apiV1.use(checkAuth);
+
+app.use(customHandlers);
+app.use(genericErrorHandler);
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(cors());
+app.use(checkAuth);
 
 const checkEnv = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const {env} = req.query;
+  const { env } = req.query;
   if (!env) {
     res.error(403, "Missing env query parameter!");
   }
@@ -172,40 +164,39 @@ const checkEnv = (req: express.Request, res: express.Response, next: express.Nex
     next();
   }
 };
-main.use(checkEnv);
-apiV1.use(checkEnv);
+app.use(checkEnv);
 
-apiV1.get('/resources', (req, res) => {
+app.get('/api/v1/resources', (req, res) => {
   return BaseResourceObject.FindAll(db, req.env, req.claims, req.query)
     .then(resources => resources.map((resource) => resource.apiResult()))
     .then(apiResults => res.success(apiResults))
     .catch(error => res.error(400, error))
 })
 
-apiV1.get('/resources/:id', (req, res) => {
+app.get('/api/v1/resources/:id', (req, res) => {
   return BaseResourceObject.Find(db, req.env, req.params.id)
     .then(resource => res.success(resource.apiResult()))
     .catch(error => res.error(404, error))
 })
 
-apiV1.post('/resources', (req, res) => {
+app.post('/api/v1/resources', (req, res) => {
   return BaseResourceObject.Create(db, req.env, req.claims, req.body)
     .then(resource => res.success(resource.apiResult(), 201))
     .catch(error => res.error(400, error))
 })
 
-apiV1.patch('/resources/:id', (req, res) => {
+app.patch('/api/v1/resources/:id', (req, res) => {
   return BaseResourceObject.Update(db, req.env, req.claims, req.params.id, req.body)
     .then(resource => res.success(resource.apiResult()))
     .catch(error => res.error(400, error))
 })
 
-apiV1.post('/resources/:id/credentials', (req, res) => {
+app.post('/api/v1/resources/:id/credentials', (req, res) => {
   return getValidatedConfig()
-          .then((config) => BaseResourceObject.CreateAWSKeys(db, req.env, req.claims, req.params.id, config))
-          .then(awsTemporaryCredentials => res.success(awsTemporaryCredentials))
-          .catch(error => res.error(400, error))
+    .then((config) => BaseResourceObject.CreateAWSKeys(db, req.env, req.claims, req.params.id, config))
+    .then(awsTemporaryCredentials => res.success(awsTemporaryCredentials))
+    .catch(error => res.error(400, error))
 })
 
-export const webApiV1 = functions.https.onRequest(main);
+export const webApiV1 = functions.https.onRequest(app);
 
