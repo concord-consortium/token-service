@@ -49,10 +49,6 @@ export class BaseResourceObject implements BaseResource {
   }
 
   hasUserRole(claims: JWTClaims, role: AccessRuleRole): boolean {
-    console.log("------------------");
-    console.log("CLAIMS", claims);
-    console.log("role", role);
-    console.log("this.accessRules", this.accessRules);
     return !!this.accessRules.find((accessRule) => {
       return (accessRule.type === "user") && (accessRule.role === role) && (accessRule.userId === claims.user_id)  && (accessRule.platformId === claims.platform_id);
     })

@@ -43,7 +43,6 @@ const customHandlers = (req: express.Request, res: express.Response, next: expre
 };
 
 const genericErrorHandler = (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error("genericErrorHandler");
   res.error(500, err);
 };
 
