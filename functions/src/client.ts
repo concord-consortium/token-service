@@ -23,7 +23,7 @@ export interface TokenServiceClientOptions {
 }
 
 export class TokenServiceClient {
-  private jwt: string;
+  public readonly jwt: string;
   private serviceUrl: string;
 
   constructor (options: TokenServiceClientOptions) {

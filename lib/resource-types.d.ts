@@ -34,13 +34,12 @@ export interface FindAllQuery {
     amOwner?: 'true' | 'false';
 }
 export declare type ResourceQuery = Omit<Partial<Resource>, "id">;
-export declare type S3ResourceQuery = Partial<S3Resource>;
-export interface CreateQuery extends Omit<ResourceQuery, 'url'> {
+export declare type S3ResourceQuery = Omit<Partial<S3Resource>, "id">;
+export interface CreateQuery extends ResourceQuery {
     accessRuleType: AccessRuleType;
     accessRuleRole: AccessRuleRole;
 }
 export declare type UpdateQuery = Omit<Omit<ResourceQuery, 'type'>, 'tool'>;
-export declare type S3UpdateQuery = Omit<Omit<S3ResourceQuery, 'type'>, 'tool'>;
 export interface Credentials {
     accessKeyId: string;
     expiration: Date;

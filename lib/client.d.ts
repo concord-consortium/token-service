@@ -4,7 +4,7 @@ export interface TokenServiceClientOptions {
     serviceUrl?: string;
 }
 export declare class TokenServiceClient {
-    private jwt;
+    readonly jwt: string;
     private serviceUrl;
     constructor(options: TokenServiceClientOptions);
     static readonly FirebaseAppName: string;
