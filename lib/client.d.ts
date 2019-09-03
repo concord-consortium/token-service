@@ -1,4 +1,5 @@
 import { Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource } from "./resource-types";
+export * from "./resource-types";
 export interface TokenServiceClientOptions {
     jwt: string;
     serviceUrl?: string;

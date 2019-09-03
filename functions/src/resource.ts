@@ -362,7 +362,7 @@ export class IotResourceObject extends BaseResourceObject {
 
   createKeys(config: Config) {
     return new Promise<Credentials>((resolve, reject) => {
-      reject(`TODO: implement create keys`);
+      reject("TODO: implement create keys");
     })
   }
 }

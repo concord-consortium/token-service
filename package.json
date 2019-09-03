@@ -4,6 +4,9 @@
   "description": "Provides a CRUD api to create resources and an api endpoint to generate AWS credentials from those resources.",
   "main": "lib/client.js",
   "scripts": {
+    "start": "cd functions && npm start",
+    "test": "cd functions && npm i && ./node_modules/.bin/jest",
+    "test:watch": "cd functions && npm i && ./node_modules/.bin/jest --watch",
     "client:build": "tsc"
   },
   "repository": {

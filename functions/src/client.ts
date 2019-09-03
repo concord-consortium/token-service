@@ -1,8 +1,8 @@
 import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource} from "./resource-types"
+export * from "./resource-types";
 
 const DEV_SERVICE_URL = "http://localhost:5000/api/v1/resources";
-const STAGING_SERVICE_URL = "?";
-const PRODUCTION_SERVICE_URL = "?";
+const PRODUCTION_SERVICE_URL = "https://token-service-62822.firebaseapp.com/api/v1/resources";
 
 enum Env {DEV = "dev", STAGING = "staging", PRODUCTION = "production"}
 const getEnv = (): Env => {
@@ -17,6 +17,26 @@ const getEnv = (): Env => {
 }
 const env = getEnv();
 
+const getServiceUrl = () => {
+  const query = window.location.search.substring(1);
+  const vars = query.split('&');
+  // tslint:disable-next-line:prefer-for-of
+  for (let i = 0; i < vars.length; i++) {
+    const pair = vars[i].split('=');
+    if (decodeURIComponent(pair[0]) === "token-service-url") {
+      const url = decodeURIComponent(pair[1]);
+      if (url === "dev") {
+        return DEV_SERVICE_URL;
+      }
+      if (url === "prod") {
+        return PRODUCTION_SERVICE_URL;
+      }
+      return url;
+    }
+  }
+  return undefined;
+}
+
 export interface TokenServiceClientOptions {
   jwt: string;
   serviceUrl?: string;
@@ -29,7 +49,7 @@ export class TokenServiceClient {
   constructor (options: TokenServiceClientOptions) {
     const {jwt, serviceUrl} = options;
     this.jwt = jwt;
-    this.serviceUrl = serviceUrl || (env === Env.DEV ? DEV_SERVICE_URL : (env === Env.STAGING ? STAGING_SERVICE_URL : PRODUCTION_SERVICE_URL));
+    this.serviceUrl = serviceUrl || getServiceUrl() || PRODUCTION_SERVICE_URL;
   }
 
   static get FirebaseAppName() {
