@@ -317,6 +317,7 @@ export class S3ResourceObject extends BaseResourceObject {
       // call assume role
       const sts = new STS({
         region: this.region,
+        endpoint: `https://sts.${this.region}.amazonaws.com`,
         accessKeyId: config.aws.key,
         secretAccessKey: config.aws.secret
       });
