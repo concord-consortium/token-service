@@ -315,7 +315,11 @@ export class S3ResourceObject extends BaseResourceObject {
       });
 
       // call assume role
-      const sts = new STS({accessKeyId: config.aws.key, secretAccessKey: config.aws.secret});
+      const sts = new STS({
+        region: this.region,
+        accessKeyId: config.aws.key,
+        secretAccessKey: config.aws.secret
+      });
       const params: STS.AssumeRoleRequest = {
         DurationSeconds: config.aws.s3credentials.duration,
         // ExternalId: // not needed
