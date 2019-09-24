@@ -2,6 +2,24 @@
 
 Provides a CRUD api to create resources and an api endpoint to generate AWS credentials from those resources.
 
+## Client
+
+A client is published in the @concord-consortium/token-service package that handles talking to the server.  Written in TypeScript, it emits type definitions so that it can be imported with types in another TypeScript package.
+
+The client constructor has the following options defined in `functions/client.ts`:
+
+```
+type EnvironmentName = "dev" | "staging" | "production"
+
+export interface TokenServiceClientOptions {
+  jwt: string;
+  env?: EnvironmentName;
+  serviceUrl?: string;
+}
+```
+
+The `jwt` option is required and the serviceUrl and env options are optional.  If the `env` option is not supplied it is determined via the window location.  If the `serviceUrl` option is not supplied it falls back to using the service url defined for the `env` and if that is not found defaults to the production service.  The serviceUrl option can be overridden via the `token-service-url` query parameter.
+
 ## API
 
 All api endpoints require the request to use `Content-Type: application/json` and a portal generated Firebase JWT.  The JWT can be provided by any of the following three methods:

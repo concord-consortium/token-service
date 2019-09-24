@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "token-service-62822"
+    "default": "token-service-62822",
+    "staging": "token-service-staging"
   }
 }

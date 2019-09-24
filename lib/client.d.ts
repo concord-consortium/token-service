@@ -1,12 +1,15 @@
 import { Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource } from "./resource-types";
 export * from "./resource-types";
+declare type EnvironmentName = "dev" | "staging" | "production";
 export interface TokenServiceClientOptions {
     jwt: string;
+    env?: EnvironmentName;
     serviceUrl?: string;
 }
 export declare class TokenServiceClient {
     readonly jwt: string;
-    private serviceUrl;
+    readonly env: EnvironmentName;
+    readonly serviceUrl: string;
     constructor(options: TokenServiceClientOptions);
     static readonly FirebaseAppName: string;
     listResources(options: FindAllQuery): Promise<Resource[]>;

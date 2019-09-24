@@ -1,55 +1,60 @@
 import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource} from "./resource-types"
 export * from "./resource-types";
 
-const DEV_SERVICE_URL = "http://localhost:5000/api/v1/resources";
-const PRODUCTION_SERVICE_URL = "https://token-service-62822.firebaseapp.com/api/v1/resources";
+type EnvironmentName = "dev" | "staging" | "production"
 
-enum Env {DEV = "dev", STAGING = "staging", PRODUCTION = "production"}
-const getEnv = (): Env => {
+export interface TokenServiceClientOptions {
+  jwt: string;
+  env?: EnvironmentName;
+  serviceUrl?: string;
+}
+
+const serviceUrls: {[k in EnvironmentName]: string} = {
+  dev: "http://localhost:5000/api/v1/resources",
+  staging: "https://token-service-staging.firebaseapp.com/api/v1/resources",
+  production: "https://token-service-62822.firebaseapp.com/api/v1/resources"
+};
+
+const getEnv = (): EnvironmentName => {
   const {host} = window.location;
   if (host.match(/staging\./)) {
-    return Env.STAGING;
+    return "staging";
   }
   if (host.match(/concord\.org/)) {
-    return Env.PRODUCTION;
+    return "production";
   }
-  return Env.DEV;
+  return "dev";
 }
-const env = getEnv();
 
-const getServiceUrl = () => {
+const getServiceUrlFromEnv = (env: EnvironmentName) => {
+  return serviceUrls[env];
+};
+
+const getServiceUrlFromQueryString = () => {
   const query = window.location.search.substring(1);
   const vars = query.split('&');
   // tslint:disable-next-line:prefer-for-of
   for (let i = 0; i < vars.length; i++) {
     const pair = vars[i].split('=');
     if (decodeURIComponent(pair[0]) === "token-service-url") {
-      const url = decodeURIComponent(pair[1]);
-      if (url === "dev") {
-        return DEV_SERVICE_URL;
-      }
-      if (url === "prod") {
-        return PRODUCTION_SERVICE_URL;
-      }
-      return url;
+      const envOrUrl = decodeURIComponent(pair[1]);
+      // allow both use of environment names and literal urls for the value
+      return getServiceUrlFromEnv(envOrUrl as EnvironmentName) ||  envOrUrl;
     }
   }
   return undefined;
 }
 
-export interface TokenServiceClientOptions {
-  jwt: string;
-  serviceUrl?: string;
-}
-
 export class TokenServiceClient {
   public readonly jwt: string;
-  private serviceUrl: string;
+  public readonly env: EnvironmentName;
+  public readonly serviceUrl: string;
 
   constructor (options: TokenServiceClientOptions) {
     const {jwt, serviceUrl} = options;
     this.jwt = jwt;
-    this.serviceUrl = serviceUrl || getServiceUrl() || PRODUCTION_SERVICE_URL;
+    this.env = options.env || getEnv();
+    this.serviceUrl = getServiceUrlFromQueryString() || serviceUrl || getServiceUrlFromEnv(this.env) || serviceUrls.production;
   }
 
   static get FirebaseAppName() {
@@ -112,7 +117,7 @@ export class TokenServiceClient {
   }
 
   private url(root: string, query: any = {}) {
-    query.env = env;
+    query.env = this.env;
     const keyValues = Object.keys(query)
       .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(query[k])}`)
       .join('&');
