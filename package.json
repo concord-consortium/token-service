@@ -7,7 +7,8 @@
     "start": "cd functions && npm start",
     "test": "cd functions && npm i && ./node_modules/.bin/jest",
     "test:watch": "cd functions && npm i && ./node_modules/.bin/jest --watch",
-    "client:build": "tsc"
+    "client:build": "tsc",
+    "prepublishOnly": "tsc"
   },
   "repository": {
     "type": "git",
