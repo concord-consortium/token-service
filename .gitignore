@@ -63,3 +63,6 @@ node_modules/
 
 # dotenv environment variables file
 .env
+
+# built client files (will be built in prePublish script when published to npm)
+lib/
