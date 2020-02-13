@@ -76,6 +76,7 @@ Returns a 200 status code with the temporary aws credentials.  Any errors are re
 
 ## Development Setup
 
+0. Install the firebase node module `npm i firebase`
 1. Run `npm i` to load all the dependencies
-2. Run `./node_modules/.bin/firebase functions:config:get > .runtimeconfig.json` ONCE to copy down the runtime environment and then CHANGE it to use the QA environment settings during development (noteably the aws.rolearn)
+2. Run `npx firebase functions:config:get > .runtimeconfig.json` ONCE to copy down the runtime environment and then CHANGE it to use the QA environment settings during development (noteably the aws.rolearn)
 2. Run `npm start` to start all servers

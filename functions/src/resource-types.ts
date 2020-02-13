@@ -62,7 +62,7 @@ export interface Credentials {
 
 export type ResourceType = "s3Folder" | "iotOrganization";
 export type ResourceTool = S3ResourceTool | IotOrganizationResourceTool;
-export type S3ResourceTool = "glossary" | "rubric";
+export type S3ResourceTool = "glossary" | "rubric" | "vortex";
 export type IotOrganizationResourceTool = "dataFlow";
 export type AccessRuleType = "user" | "context";
 export type AccessRuleRole = "owner" | "member";

@@ -102,6 +102,19 @@ const createS3Resource = (accessRules: AccessRule[] = []) => {
   });
 };
 
+const createS3VortexConfig = (accessRules: AccessRule[] = []) => {
+  return new S3ResourceObject("test", {
+    name: "test",
+    description: "test",
+    type: "s3Folder",
+    tool: "vortex",
+    accessRules,
+    bucket: "test-vortex-bucket",
+    folder: "test-vortex-folder",
+    region: "test-vortex-region"
+  });
+};
+
 const createIotResource = (accessRules: AccessRule[] = []) => {
   return new IotResourceObject("test", {
     name: "test",
@@ -193,6 +206,20 @@ describe("Resource", () => {
         region: "test-region"
       });
     });
+
+    it("should be capable of creating vortex configurations", () => {
+      expect(createS3VortexConfig().apiResult()).toEqual({
+        accessRules: [],
+        bucket: "test-vortex-bucket",
+        description: "test",
+        folder: "test-vortex-folder",
+        id: "test",
+        name: "test",
+        region: "test-vortex-region",
+        tool: "vortex",
+        type: "s3Folder"
+      })
+    })
 
     it("should not allow keys to be created without access rules", () => {
       expect(createS3Resource([]).canCreateKeys(validClaims)).toEqual(false);
