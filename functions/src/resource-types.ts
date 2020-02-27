@@ -59,10 +59,14 @@ export interface Credentials {
   bucket: string;
   keyPrefix: string;
 }
-
+// For runtime checks from outside calls.
+export enum S3ResourceTool {
+  Glossary = "glossary",
+  Rubric = "rubric",
+  Vortex = "vortex"
+};
 export type ResourceType = "s3Folder" | "iotOrganization";
 export type ResourceTool = S3ResourceTool | IotOrganizationResourceTool;
-export type S3ResourceTool = "glossary" | "rubric" | "vortex";
 export type IotOrganizationResourceTool = "dataFlow";
 export type AccessRuleType = "user" | "context";
 export type AccessRuleRole = "owner" | "member";

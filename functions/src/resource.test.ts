@@ -1,5 +1,5 @@
 import { S3ResourceObject, IotResourceObject, BaseResourceObject } from "./resource";
-import { AccessRule } from "./resource-types";
+import { AccessRule, S3ResourceTool } from "./resource-types";
 import { JWTClaims } from "./firestore-types";
 import { STS, AWSError } from "aws-sdk";
 
@@ -81,7 +81,7 @@ const createBaseResource = (accessRules: AccessRule[] = []) => {
     name: "test",
     description: "test",
     type: "s3Folder",
-    tool: "glossary",
+    tool: S3ResourceTool.Glossary,
     accessRules,
     bucket: "test-bucket",
     folder: "test-folder",
@@ -94,7 +94,7 @@ const createS3Resource = (accessRules: AccessRule[] = []) => {
     name: "test",
     description: "test",
     type: "s3Folder",
-    tool: "glossary",
+    tool: S3ResourceTool.Glossary,
     accessRules,
     bucket: "test-bucket",
     folder: "test-folder",
@@ -107,7 +107,7 @@ const createS3VortexConfig = (accessRules: AccessRule[] = []) => {
     name: "test",
     description: "test",
     type: "s3Folder",
-    tool: "vortex",
+    tool: S3ResourceTool.Vortex,
     accessRules,
     bucket: "test-vortex-bucket",
     folder: "test-vortex-folder",

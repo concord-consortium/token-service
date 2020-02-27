@@ -1,7 +1,7 @@
 import { JWTClaims, FireStoreResource, FireStoreS3Resource, FireStoreResourceSettings} from "./firestore-types";
 import { ResourceType, ResourceTool, AccessRule, AccessRuleRole, ContextAccessRule, UserAccessRule,
          FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
-         BaseResource, IotResource} from "./resource-types";
+         BaseResource, IotResource, S3ResourceTool } from "./resource-types";
 import { STS } from "aws-sdk";
 
 const RESOURCE_COLLECTION_ID = 'resources';
@@ -13,6 +13,9 @@ const getResourceCollection = (db: FirebaseFirestore.Firestore, env: string) => 
 const getResourceSettingsCollection = (db: FirebaseFirestore.Firestore, env: string) => {
   return db.collection(`${env}:${RESOURCE_SETTINGS_COLLECTION_ID}`);
 };
+const isKnownS3Tool = (toolName: string) => {
+  return Object.values(S3ResourceTool).indexOf(toolName) > 0;
+}
 
 export class BaseResourceObject implements BaseResource {
   id: string;
@@ -154,7 +157,7 @@ export class BaseResourceObject implements BaseResource {
             let newResource: FireStoreResource;
             switch (type) {
               case "s3Folder":
-                if (!((tool === "glossary") || (tool === "rubric"))) {
+                if (!isKnownS3Tool(tool)) {
                   reject(`Unknown s3Folder tool: ${tool}`);
                   return;
                 }
@@ -232,6 +235,30 @@ export class BaseResourceObject implements BaseResource {
           return;
         })
         .catch(reject)
+    });
+  }
+
+  static delete(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, id: string, query: UpdateQuery) {
+    return new Promise<Date>((resolve, reject) => {
+      const docRef = getResourceCollection(db, env).doc(id);
+      docRef.get()
+      .then( (docSnapshot) => {
+        if (docSnapshot.exists) {
+          const resource = BaseResourceObject.FromDocumentSnapshot(docSnapshot);
+          if (resource.isOwner(claims)) {
+              docRef.delete()
+              .then(deleteResult => resolve(deleteResult.writeTime.toDate()))
+              .catch(e => reject(`Firebase err on delete: ${e}`));
+          }
+          else {
+            reject(`You do not have permission to update resource ${id}!`);
+          }
+        }
+        else {
+          reject(`Resource ${id} not found!`);
+        }
+      })
+      .catch(reject);
     });
   }
 
