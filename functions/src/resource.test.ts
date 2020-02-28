@@ -1,5 +1,5 @@
-import { S3ResourceObject, IotResourceObject, BaseResourceObject } from "./resource";
-import { AccessRule } from "./resource-types";
+import { S3ResourceObject, IotResourceObject, BaseResourceObject, isKnownS3Tool } from "./resource";
+import { AccessRule, S3ResourceTool } from "./resource-types";
 import { JWTClaims } from "./firestore-types";
 import { STS, AWSError } from "aws-sdk";
 
@@ -81,7 +81,7 @@ const createBaseResource = (accessRules: AccessRule[] = []) => {
     name: "test",
     description: "test",
     type: "s3Folder",
-    tool: "glossary",
+    tool: S3ResourceTool.Glossary,
     accessRules,
     bucket: "test-bucket",
     folder: "test-folder",
@@ -94,11 +94,24 @@ const createS3Resource = (accessRules: AccessRule[] = []) => {
     name: "test",
     description: "test",
     type: "s3Folder",
-    tool: "glossary",
+    tool: S3ResourceTool.Glossary,
     accessRules,
     bucket: "test-bucket",
     folder: "test-folder",
     region: "test-region"
+  });
+};
+
+const createS3VortexConfig = (accessRules: AccessRule[] = []) => {
+  return new S3ResourceObject("test", {
+    name: "test",
+    description: "test",
+    type: "s3Folder",
+    tool: S3ResourceTool.Vortex,
+    accessRules,
+    bucket: "test-vortex-bucket",
+    folder: "test-vortex-folder",
+    region: "test-vortex-region"
   });
 };
 
@@ -111,6 +124,15 @@ const createIotResource = (accessRules: AccessRule[] = []) => {
     accessRules,
   });
 };
+
+describe("isKnownS3Tool", () => {
+  it("should recognize the vortex, glossary, and rubric", () => {
+    ["vortex", "glossary", "rubric"].forEach( t=> expect(isKnownS3Tool(t)).toBeTruthy());
+  });
+  it("should recognize a fake-tool", () => {
+    expect(isKnownS3Tool('super-fake-tool')).toBeFalsy();
+  });
+});
 
 describe("Resource", () => {
   describe("BaseResourceObject", () => {
@@ -194,6 +216,19 @@ describe("Resource", () => {
       });
     });
 
+    it("should be capable of creating vortex configurations", () => {
+      expect(createS3VortexConfig().apiResult()).toEqual({
+        accessRules: [],
+        bucket: "test-vortex-bucket",
+        description: "test",
+        folder: "test-vortex-folder",
+        id: "test",
+        name: "test",
+        region: "test-vortex-region",
+        tool: "vortex",
+        type: "s3Folder"
+      })
+    })
     it("should not allow keys to be created without access rules", () => {
       expect(createS3Resource([]).canCreateKeys(validClaims)).toEqual(false);
     });

@@ -197,5 +197,12 @@ app.post('/api/v1/resources/:id/credentials', (req, res) => {
     .catch(error => res.error(400, error))
 })
 
+app.delete('/api/v1/resources/:id', (req, res) => {
+  return BaseResourceObject
+    .delete(db, req.env, req.claims, req.params.id, req.body)
+    .then(deleteDate => res.success({date: deleteDate}))
+    .catch(error  => res.error(400, error))
+})
+
 export const webApiV1 = functions.https.onRequest(app);
 

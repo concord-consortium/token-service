@@ -93,6 +93,15 @@ export class TokenServiceClient {
     })
   }
 
+  // TODO: NB: This only deletes firestore record of the resource …
+  deleteResource(resourceId: string) {
+    return new Promise<Resource>((resolve, reject) => {
+      return this.fetch("DELETE", this.url(`/${resourceId}`))
+        .then(resolve)
+        .catch(reject)
+    })
+  }
+
   getCredentials(resourceId: string) {
     return new Promise<Credentials>((resolve, reject) => {
       return this.fetch("POST", this.url(`/${resourceId}/credentials`))

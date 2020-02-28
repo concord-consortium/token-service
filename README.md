@@ -74,8 +74,27 @@ No parameters.
 
 Returns a 200 status code with the temporary aws credentials.  Any errors are returned with a 400 status code.
 
+
+## Creating new S3ResourceTools
+
+To Create a new S3 Resource tool, add the tool name to the `S3ResourceTool` in
+`resource-types.ts`. You will also need to create a resourceSettings document
+in FireStore for each environment you work in, eg: `staging:resourceSettings`
+The entry should look like this:
+
+```javascript
+
+  bucket: "token-service-files",
+  folder: "vortex",     // good idea to match `tool` below.
+  region: "us-east-1",
+  tool: "vortex",       // Use your tool's name as defined in resource-types.ts
+  type: "s3Folder"
+
+```
+
 ## Development Setup
 
+0. Install the firebase node module `npm i firebase`
 1. Run `npm i` to load all the dependencies
-2. Run `./node_modules/.bin/firebase functions:config:get > .runtimeconfig.json` ONCE to copy down the runtime environment and then CHANGE it to use the QA environment settings during development (noteably the aws.rolearn)
+2. Run `npx firebase functions:config:get > .runtimeconfig.json` ONCE to copy down the runtime environment and then CHANGE it to use the QA environment settings during development (noteably the aws.rolearn)
 2. Run `npm start` to start all servers

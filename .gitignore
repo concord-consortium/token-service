@@ -66,3 +66,6 @@ node_modules/
 
 # built client files (will be built in prePublish script when published to npm)
 lib/
+
+# ignore firebase runtime configurations
+.runtimeconfig.json
