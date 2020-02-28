@@ -127,7 +127,7 @@ const createIotResource = (accessRules: AccessRule[] = []) => {
 
 describe("isKnownS3Tool", () => {
   it("should recognize the vortex, glossary, and rubric", () => {
-    ["vortex", "glossary", "rubric"].forEach( t=> expect(isKnownS3Tool(t)).toBeTruthy();
+    ["vortex", "glossary", "rubric"].forEach( t=> expect(isKnownS3Tool(t)).toBeTruthy());
   });
   it("should recognize a fake-tool", () => {
     expect(isKnownS3Tool('super-fake-tool')).toBeFalsy();
