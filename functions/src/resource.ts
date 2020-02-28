@@ -13,8 +13,9 @@ const getResourceCollection = (db: FirebaseFirestore.Firestore, env: string) => 
 const getResourceSettingsCollection = (db: FirebaseFirestore.Firestore, env: string) => {
   return db.collection(`${env}:${RESOURCE_SETTINGS_COLLECTION_ID}`);
 };
-const isKnownS3Tool = (toolName: string) => {
-  return Object.values(S3ResourceTool).indexOf(toolName) > 0;
+
+export const isKnownS3Tool = (toolName: string) => {
+  return Object.values(S3ResourceTool).indexOf(toolName) !== -1;
 }
 
 export class BaseResourceObject implements BaseResource {
@@ -251,7 +252,7 @@ export class BaseResourceObject implements BaseResource {
               .catch(e => reject(`Firebase err on delete: ${e}`));
           }
           else {
-            reject(`You do not have permission to update resource ${id}!`);
+            reject(`You do not have permission to delete resource ${id}!`);
           }
         }
         else {

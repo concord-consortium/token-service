@@ -1,4 +1,4 @@
-import { S3ResourceObject, IotResourceObject, BaseResourceObject } from "./resource";
+import { S3ResourceObject, IotResourceObject, BaseResourceObject, isKnownS3Tool } from "./resource";
 import { AccessRule, S3ResourceTool } from "./resource-types";
 import { JWTClaims } from "./firestore-types";
 import { STS, AWSError } from "aws-sdk";
@@ -125,6 +125,15 @@ const createIotResource = (accessRules: AccessRule[] = []) => {
   });
 };
 
+describe("isKnownS3Tool", () => {
+  it("should recognize the vortex, glossary, and rubric", () => {
+    ["vortex", "glossary", "rubric"].forEach( t=> expect(isKnownS3Tool(t)).toBeTruthy();
+  });
+  it("should recognize a fake-tool", () => {
+    expect(isKnownS3Tool('super-fake-tool')).toBeFalsy();
+  });
+});
+
 describe("Resource", () => {
   describe("BaseResourceObject", () => {
     it("should return an apiResult", () => {
@@ -220,7 +229,6 @@ describe("Resource", () => {
         type: "s3Folder"
       })
     })
-
     it("should not allow keys to be created without access rules", () => {
       expect(createS3Resource([]).canCreateKeys(validClaims)).toEqual(false);
     });
