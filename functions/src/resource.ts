@@ -15,7 +15,7 @@ const getResourceSettingsCollection = (db: FirebaseFirestore.Firestore, env: str
 };
 
 export const isKnownS3Tool = (toolName: string) => {
-  return Object.values(S3ResourceTool).indexOf(toolName) !== -1;
+  return Object.values(S3ResourceTool).indexOf(toolName as S3ResourceTool) !== -1;
 }
 
 export class BaseResourceObject implements BaseResource {

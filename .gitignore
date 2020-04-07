@@ -69,3 +69,5 @@ lib/
 
 # ignore firebase runtime configurations
 .runtimeconfig.json
+
+.idea
