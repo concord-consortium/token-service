@@ -94,7 +94,8 @@ The entry should look like this:
 
 ## Development Setup
 
-0. Install the firebase node module `npm i firebase`
+0. Install [Firebase CLI](https://firebase.google.com/docs/cli#mac-linux-npm) `npm i -g firebase-tools`  and run `firebase login`
 1. Run `npm i` to load all the dependencies
-2. Run `npx firebase functions:config:get > .runtimeconfig.json` ONCE to copy down the runtime environment and then CHANGE it to use the QA environment settings during development (noteably the aws.rolearn)
-2. Run `npm start` to start all servers
+2. Run `firebase use staging` to use staging environment (recommended for development)
+3. Run `firebase functions:config:get > .runtimeconfig.json` ONCE to copy down the runtime environment
+4. Run `npm start` to start all servers
