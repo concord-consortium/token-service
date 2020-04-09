@@ -5,6 +5,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 firebase-debug.log*
+.DS_Store
+.idea
 
 # Firebase cache
 .firebase/
@@ -67,5 +69,3 @@ node_modules/
 # built client files (will be built in prePublish script when published to npm)
 lib/
 
-# ignore firebase runtime configurations
-.runtimeconfig.json
