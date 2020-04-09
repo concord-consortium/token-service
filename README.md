@@ -94,8 +94,23 @@ The entry should look like this:
 
 ## Development Setup
 
-0. Install [Firebase CLI](https://firebase.google.com/docs/cli#mac-linux-npm) `npm i -g firebase-tools`  and run `firebase login`
-1. Run `npm i` to load all the dependencies
-2. Run `firebase use staging` to use staging environment (recommended for development)
-3. Run `firebase functions:config:get > .runtimeconfig.json` ONCE to copy down the runtime environment
-4. Run `npm start` to start all servers
+### Local Firebase function development
+
+#### Basic Firebase setup (done once)
+
+1. Install [Firebase CLI](https://firebase.google.com/docs/cli#mac-linux-npm): `npm i -g firebase-tools`  
+2. Run `firebase login`
+3. Run `firebase use staging` to use https://console.firebase.google.com/project/token-service-staging Firebase project (to use production version: `firebase use default`).
+4. Run `firebase functions:config:get > functions/.runtimeconfig.json` to copy down the runtime environment
+5. Set up admin credentials:
+  - Open https://console.firebase.google.com/project/token-service-staging/settings/serviceaccounts/adminsdk
+  - Click "Generate New Private Key" and download JSON file
+  - Change its name to `key.json` and copy it to `functions/key.json` - it will be automatically exported in ENV variable in `npm serve` script (check `functions/package.json`)
+  - .gitignore lists `key.json` - never commit or share this file
+
+
+#### Firebase Functions and Client setup
+
+1. `cd functions` 
+2. Run `npm i` to load all the dependencies
+3. Run `npm start` to start all servers

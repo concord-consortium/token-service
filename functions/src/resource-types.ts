@@ -63,8 +63,9 @@ export interface Credentials {
 export enum S3ResourceTool {
   Glossary = "glossary",
   Rubric = "rubric",
-  Vortex = "vortex"
-};
+  Vortex = "vortex",
+  ExampleApp = "example-app"
+}
 export type ResourceType = "s3Folder" | "iotOrganization";
 export type ResourceTool = S3ResourceTool | IotOrganizationResourceTool;
 export type IotOrganizationResourceTool = "dataFlow";

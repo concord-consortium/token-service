@@ -5,8 +5,7 @@
   "main": "lib/client.js",
   "scripts": {
     "start": "cd functions && npm start",
-    "test": "cd functions && npm i && ./node_modules/.bin/jest",
-    "test:watch": "cd functions && npm i && ./node_modules/.bin/jest --watch",
+    "test": "cd functions && npm run test",
     "client:build": "tsc",
     "prepublishOnly": "tsc"
   },

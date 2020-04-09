@@ -99,7 +99,7 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
   if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
     token = req.headers.authorization.split(' ')[1];
   } else if (req.query && req.query.token) {
-    token = req.query.token;
+    token = req.query.token as string;
   } else if (req.cookies && req.cookies.token) {
     token = req.cookies.token;
   }
@@ -120,7 +120,7 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
       }
       else {
         const public_key = config.admin.public_key.split("\\n").join("\n");
-        verify(token, public_key, { algorithms: ["RS256"] }, (error, decoded: any) => {
+        verify(token, public_key, { algorithms: ["RS256"] }, (error: any, decoded: any) => {
           if (error) {
             res.error(403, error);
           }
@@ -159,7 +159,7 @@ const checkEnv = (req: express.Request, res: express.Response, next: express.Nex
     res.error(403, "Missing env query parameter!");
   }
   else {
-    req.env = env;
+    req.env = env as string;
     next();
   }
 };
