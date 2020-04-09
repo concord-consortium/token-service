@@ -41,7 +41,7 @@ const AppComponent = () => {
   };
 
   const handleUploadFile = async () => {
-    setFilePublicUrl(await helpers.uploadFileUsingFirebaseJTW(fileContent, firebaseJwt, tokenServiceEnv as "dev" | "staging"));
+    setFilePublicUrl(await helpers.uploadFileUsingFirebaseJWT(fileContent, firebaseJwt, tokenServiceEnv as "dev" | "staging"));
   };
 
   return (
@@ -50,8 +50,8 @@ const AppComponent = () => {
         <h3>Portal Setup</h3>
         <p className="hint">
           Token Service requires FirebaseJWT that can be obtained from Portal. Provide Portal configuration, click
-          "Authorize in Portal" (note that it'll reload this page) and finally "Get FirebaseJWT". When FirebaseJWT
-          is available, you can upload file to S3 using TokenServiceClient.
+          "Authorize in Portal" (it will require a login at the Portal if your user is not currently logged in) and then
+          click "Get FirebaseJWT". When FirebaseJWT is available, you can upload file to S3 using TokenServiceClient.
         </p>
         {
           !portalAccessToken &&
