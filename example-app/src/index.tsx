@@ -4,9 +4,9 @@ import * as helpers from "./helpers"
 
 // Simple app handling configuration and using helpers.
 const AppComponent = () => {
-  const [tokenServiceEnv, setTokenServiceEnv] = useState(localStorage.getItem("tokenServiceEnv") || "dev");
-  const [portalUrl, setPortalUrl] = useState(localStorage.getItem("portalUrl") || "https://app.rigse.docker");
-  const [oauthClientName, setOauthClientName] = useState(localStorage.getItem("oauthClientName") || "localhost-public");
+  const [tokenServiceEnv, setTokenServiceEnv] = useState(localStorage.getItem("tokenServiceEnv") || "staging");
+  const [portalUrl, setPortalUrl] = useState(localStorage.getItem("portalUrl") || "https://learn.staging.concord.org");
+  const [oauthClientName, setOauthClientName] = useState(localStorage.getItem("oauthClientName") || "token-service-example-app");
   const [firebaseAppName, setFirebaseAppName] = useState(localStorage.getItem("firebaseApp") || "token-service");
   const [portalAccessToken, setPortalAccessToken] = useState("");
   const [firebaseJwt, setFirebaseJwt] = useState("");
