@@ -7,7 +7,9 @@
     "start": "cd functions && npm start",
     "test": "cd functions && npm run test",
     "client:build": "tsc",
-    "prepublishOnly": "tsc"
+    "prepublishOnly": "tsc",
+    "example-app:build": "cd example-app && npm run build",
+    "make-dist": "rm -rf dist && mkdir dist && cp -R example-app/dist ./dist/example-app"
   },
   "repository": {
     "type": "git",
