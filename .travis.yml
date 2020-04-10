@@ -18,6 +18,6 @@ script:
   - cd functions && npm run build && npm run test && cd ..
   - cd client && npm run build && cd ..
   - cd example-app && npm run build && cd ..
-  - mkdir -p dist/example-app && cp -R example-app/dist/ dist/example-app
+  - mkdir -p dist/example-app && cp -R example-app/dist/. dist/example-app
 after_success:
   - ./s3_deploy.sh
