@@ -1,0 +1,23 @@
+{
+  "name": "@concord-consortium/token-service",
+  "version": "1.2.0",
+  "description": "Provides a CRUD api to create resources and an api endpoint to generate AWS credentials from those resources.",
+  "main": "lib/client/src/client.js",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/concord-consortium/token-service.git"
+  },
+  "author": "Doug Martin",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/concord-consortium/token-service/issues"
+  },
+  "homepage": "https://github.com/concord-consortium/token-service#readme",
+  "devDependencies": {
+    "typescript": "^3.5.3"
+  }
+}

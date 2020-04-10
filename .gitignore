@@ -7,7 +7,7 @@ yarn-error.log*
 firebase-debug.log*
 .DS_Store
 .idea
-#dist
+dist
 
 # Firebase cache
 .firebase/
