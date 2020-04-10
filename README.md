@@ -94,23 +94,30 @@ The entry should look like this:
 
 ## Development Setup
 
+### Build TokenServiceClient only
+
+1. Run `npm i`
+2. Run `npm run client:build`
+
+It will create `lib/` dir with client JS files.
+
 ### Local Firebase function development
 
 #### Basic Firebase setup (done once)
 
-1. Install [Firebase CLI](https://firebase.google.com/docs/cli#mac-linux-npm): `npm i -g firebase-tools`  
-2. Run `firebase login`
-3. Run `firebase use staging` to use https://console.firebase.google.com/project/token-service-staging Firebase project (to use production version: `firebase use default`).
-4. Run `firebase functions:config:get > functions/.runtimeconfig.json` to copy down the runtime environment
-5. Set up admin credentials:
+1. `cd functions` (all the commands below should be executed in `functions/` dir)
+1. Run `npx firebase login`
+2. Run `npx firebase use staging` to use https://console.firebase.google.com/project/token-service-staging Firebase project (to use production version: `firebase use default`).
+3. Run `npx firebase functions:config:get > .runtimeconfig.json` to copy down the runtime environment
+4. Set up admin credentials:
   - Open https://console.firebase.google.com/project/token-service-staging/settings/serviceaccounts/adminsdk
   - Click "Generate New Private Key" and download JSON file
   - Change its name to `key.json` and copy it to `functions/key.json` - it will be automatically exported in ENV variable in `npm serve` script (check `functions/package.json`)
   - .gitignore lists `key.json` - never commit or share this file
 
 
-#### Firebase Functions and Client setup
+#### Firebase Functions server
 
-1. `cd functions` 
+1. `cd functions` (all the commands below should be executed in `functions/` dir)
 2. Run `npm i` to load all the dependencies
 3. Run `npm start` to start all servers
