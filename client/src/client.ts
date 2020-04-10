@@ -1,5 +1,5 @@
-import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource} from "./resource-types"
-export * from "./resource-types";
+import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource} from "../../functions/src/resource-types"
+export * from "../../functions/src/resource-types";
 
 type EnvironmentName = "dev" | "staging" | "production"
 
@@ -160,4 +160,3 @@ export class TokenServiceClient {
     })
   }
 }
-
