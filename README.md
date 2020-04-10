@@ -22,7 +22,7 @@ The `jwt` option is required and the serviceUrl and env options are optional.  I
 
 ## Example App (`example-app` subdirectory)
 
-http://token-service.concord.org/branch/travis-test/example-app/index.html
+http://token-service.concord.org/example-app/index.html
 
 This app is designed to show the simplest possible way to use Token Service (TokenServiceClient) and it's meant to be
 used by developers to work on the new Token Service features or to provide recipes how to use its API.
