@@ -26,4 +26,4 @@ cloudfront_distribution_config:
   aliases:
     quantity: 1
     items:
-      - wildfire.concord.org
+      - token-service.concord.org

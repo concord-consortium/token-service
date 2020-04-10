@@ -12,12 +12,11 @@ install:
   - travis_retry gem install s3_website -v 3.4.0
   - travis_retry pip install awscli --upgrade --user
   - travis_retry npm ci
-  - cd functions && travis_retry npm ci && cd ..
+#  - cd functions && travis_retry npm ci && cd ..
   - cd example-app && travis_retry npm ci && cd ..
 script:
-  - npm run test
+#  - npm run test
   - npm run client:build
   - npm run example-app:build
-  - npm run make-dist # copy example-app to ./dist dir before starting deployment
-after_success:
+  - npm run make-dist
   - ./s3_deploy.sh

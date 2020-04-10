@@ -9,7 +9,7 @@
     "client:build": "tsc",
     "prepublishOnly": "tsc",
     "example-app:build": "cd example-app && npm run build",
-    "make-dist": "rm -rf dist && mkdir dist && cp -R example-app/dist ./dist/example-app"
+    "make-dist": "rm -rf dist && mkdir -p dist && cp ./example-app/dist/*.js ./dist && cp ./example-app/dist/*.html ./dist"
   },
   "repository": {
     "type": "git",
