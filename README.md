@@ -2,11 +2,11 @@
 
 Provides a CRUD api to create resources and an api endpoint to generate AWS credentials from those resources.
 
-## Client
+## Client (`client` subdirectory)
 
 A client is published in the @concord-consortium/token-service package that handles talking to the server.  Written in TypeScript, it emits type definitions so that it can be imported with types in another TypeScript package.
 
-The client constructor has the following options defined in `functions/client.ts`:
+The client constructor has the following options defined in `client/src/client.ts`:
 
 ```
 type EnvironmentName = "dev" | "staging" | "production"
@@ -20,7 +20,16 @@ export interface TokenServiceClientOptions {
 
 The `jwt` option is required and the serviceUrl and env options are optional.  If the `env` option is not supplied it is determined via the window location.  If the `serviceUrl` option is not supplied it falls back to using the service url defined for the `env` and if that is not found defaults to the production service.  The serviceUrl option can be overridden via the `token-service-url` query parameter.
 
-## API
+## Example App (`example-app` subdirectory)
+
+http://token-service.concord.org/example-app/index.html
+
+This app is designed to show the simplest possible way to use Token Service (TokenServiceClient) and it's meant to be
+used by developers to work on the new Token Service features or to provide recipes how to use its API.
+Note that errors are not handled, so in the real applications, you should consider adding that. It's not done here
+on purpose to keep the code smaller and less opinionated.
+
+## API (`functions` subdirectory)
 
 All api endpoints require the request to use `Content-Type: application/json` and a portal generated Firebase JWT.  The JWT can be provided by any of the following three methods:
 
@@ -74,7 +83,6 @@ No parameters.
 
 Returns a 200 status code with the temporary aws credentials.  Any errors are returned with a 400 status code.
 
-
 ## Creating new S3ResourceTools
 
 To Create a new S3 Resource tool, add the tool name to the `S3ResourceTool` in
@@ -94,14 +102,29 @@ The entry should look like this:
 
 ## Development Setup
 
-### Build TokenServiceClient only
+### TokenServiceClient
 
-1. Run `npm i`
-2. Run `npm run client:build`
+1. `cd client` (all the commands below should be executed in `client/` dir)
+2. Run `npm i`
+3. Run `npm run build`
 
 It will create `lib/` dir with client JS files.
 
-### Local Firebase function development
+### Example App
+
+This app is using TokenServiceClient. It is linked in the example-app/package.json using relative path `../client`. 
+It lets you develop the client and the example app together. But it means that the client needs to be built first 
+(follow steps described in Development Setup > TokenServiceClient).
+Also, TokenServiceClient needs to be rebuilt each time there are some changes that you would like to use in the example 
+app. Its build process can also be run directly from example-app dir using `npm run client:build`.
+
+To start local server with example app:
+
+1. `cd functions` (all the commands below should be executed in `example-app/` dir)
+2. Install dependencies: `npm i`
+3. Start local server: `npm start`
+
+### Firebase functions
 
 #### Basic Firebase setup (done once)
 
