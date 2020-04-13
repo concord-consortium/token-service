@@ -1,7 +1,7 @@
 import { JWTClaims, FireStoreResource, FireStoreS3Resource, FireStoreResourceSettings} from "./firestore-types";
-import { ResourceType, ResourceTool, AccessRule, AccessRuleRole, ContextAccessRule, UserAccessRule,
+import { ResourceType, AccessRule, AccessRuleRole, ContextAccessRule, UserAccessRule,
          FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
-         BaseResource, IotResource, S3ResourceTool } from "./resource-types";
+         BaseResource, IotResource } from "./resource-types";
 import { STS } from "aws-sdk";
 
 const RESOURCE_COLLECTION_ID = 'resources';
@@ -14,17 +14,13 @@ const getResourceSettingsCollection = (db: FirebaseFirestore.Firestore, env: str
   return db.collection(`${env}:${RESOURCE_SETTINGS_COLLECTION_ID}`);
 };
 
-export const isKnownS3Tool = (toolName: string) => {
-  return Object.values(S3ResourceTool).indexOf(toolName as S3ResourceTool) !== -1;
-};
-
 export class BaseResourceObject implements BaseResource {
   id: string;
   name: string;
   description: string;
   type: ResourceType;
-  tool: ResourceTool;
-  accessRules: AccessRule[]
+  tool: string;
+  accessRules: AccessRule[];
 
   constructor (id: string, doc: FireStoreResource) {
     this.id = id;
@@ -66,7 +62,7 @@ export class BaseResourceObject implements BaseResource {
     return this.hasUserRole(claims, "owner") || this.hasUserRole(claims, "member");
   }
 
-  static GetResourceSettings(db: FirebaseFirestore.Firestore, env: string, type: ResourceType, tool: ResourceTool) {
+  static GetResourceSettings(db: FirebaseFirestore.Firestore, env: string, type: ResourceType, tool: string) {
     return new Promise<FireStoreResourceSettings>((resolve, reject) => {
       return getResourceSettingsCollection(db, env).where("type", "==", type).where("tool", "==", tool).get()
         .then((querySnapshot) => {
@@ -158,10 +154,6 @@ export class BaseResourceObject implements BaseResource {
             let newResource: FireStoreResource;
             switch (type) {
               case "s3Folder":
-                if (!isKnownS3Tool(tool)) {
-                  reject(`Unknown s3Folder tool: ${tool}`);
-                  return;
-                }
                 const {bucket, folder, region} = settings;
                 newResource = {
                   type: "s3Folder",

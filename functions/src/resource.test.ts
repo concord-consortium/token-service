@@ -1,5 +1,5 @@
-import { S3ResourceObject, IotResourceObject, BaseResourceObject, isKnownS3Tool } from "./resource";
-import { AccessRule, S3ResourceTool } from "./resource-types";
+import { S3ResourceObject, IotResourceObject, BaseResourceObject } from "./resource";
+import { AccessRule } from "./resource-types";
 import { JWTClaims } from "./firestore-types";
 import { STS, AWSError } from "aws-sdk";
 
@@ -81,7 +81,7 @@ const createBaseResource = (accessRules: AccessRule[] = []) => {
     name: "test",
     description: "test",
     type: "s3Folder",
-    tool: S3ResourceTool.Glossary,
+    tool: "glossary",
     accessRules,
     bucket: "test-bucket",
     folder: "test-folder",
@@ -94,7 +94,7 @@ const createS3Resource = (accessRules: AccessRule[] = []) => {
     name: "test",
     description: "test",
     type: "s3Folder",
-    tool: S3ResourceTool.Glossary,
+    tool: "glossary",
     accessRules,
     bucket: "test-bucket",
     folder: "test-folder",
@@ -107,7 +107,7 @@ const createS3VortexConfig = (accessRules: AccessRule[] = []) => {
     name: "test",
     description: "test",
     type: "s3Folder",
-    tool: S3ResourceTool.Vortex,
+    tool: "vortex",
     accessRules,
     bucket: "test-vortex-bucket",
     folder: "test-vortex-folder",
@@ -124,15 +124,6 @@ const createIotResource = (accessRules: AccessRule[] = []) => {
     accessRules,
   });
 };
-
-describe("isKnownS3Tool", () => {
-  it("should recognize the vortex, glossary, and rubric", () => {
-    ["vortex", "glossary", "rubric"].forEach( t=> expect(isKnownS3Tool(t)).toBeTruthy());
-  });
-  it("should recognize a fake-tool", () => {
-    expect(isKnownS3Tool('super-fake-tool')).toBeFalsy();
-  });
-});
 
 describe("Resource", () => {
   describe("BaseResourceObject", () => {

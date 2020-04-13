@@ -1,4 +1,4 @@
-import { S3Resource, IotResource, ResourceTool } from "./resource-types";
+import { S3Resource, IotResource } from "./resource-types";
 
 export type FireStoreResource = FireStoreS3Resource | FireStoreIotOrganizationResource;
 
@@ -13,7 +13,7 @@ export type FireStoreResourceSettings = FireStoreS3ResourceSettings;
 
 export interface FireStoreS3ResourceSettings {
   type: "s3Folder";
-  tool: ResourceTool;
+  tool: string;
   bucket: string;
   folder: string;
   region: string;

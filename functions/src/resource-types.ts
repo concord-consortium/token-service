@@ -19,7 +19,7 @@ export interface BaseResource {
   name: string;
   description: string;
   type: ResourceType;
-  tool: ResourceTool;
+  tool: string;
   accessRules: AccessRule[]
 }
 
@@ -36,7 +36,7 @@ export interface IotResource extends BaseResource {
 export interface FindAllQuery {
   name?: string;
   type?: ResourceType;
-  tool?: ResourceTool;
+  tool?: string;
   amOwner?: 'true' | 'false';
 }
 
@@ -59,16 +59,8 @@ export interface Credentials {
   bucket: string;
   keyPrefix: string;
 }
-// For runtime checks from outside calls.
-export enum S3ResourceTool {
-  Glossary = "glossary",
-  Rubric = "rubric",
-  Vortex = "vortex",
-  ExampleApp = "example-app"
-}
+
 export type ResourceType = "s3Folder" | "iotOrganization";
-export type ResourceTool = S3ResourceTool | IotOrganizationResourceTool;
-export type IotOrganizationResourceTool = "dataFlow";
 export type AccessRuleType = "user" | "context";
 export type AccessRuleRole = "owner" | "member";
 
