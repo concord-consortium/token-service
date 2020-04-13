@@ -1,5 +1,5 @@
 import ClientOAuth2 from "client-oauth2";
-import { TokenServiceClient, S3Resource, S3ResourceTool } from "@concord-consortium/token-service";
+import { TokenServiceClient, S3Resource } from "@concord-consortium/token-service";
 import * as AWS from "aws-sdk";
 
 // This file provides simple recipes showing how to use TokenServiceClient and how to get other necessary
@@ -43,7 +43,7 @@ export const uploadFileUsingFirebaseJWT = async (fileContent: string, firebaseJw
   const client = new TokenServiceClient({ jwt: firebaseJwt, env: tokenServiceEnv });
   const filename = "test.txt";
   const resource: S3Resource = await client.createResource({
-    tool: S3ResourceTool.ExampleApp,
+    tool: "example-app",
     type: "s3Folder",
     name: filename,
     description: "test file",
