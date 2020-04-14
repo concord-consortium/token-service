@@ -71,6 +71,10 @@ export class BaseResourceObject implements BaseResource {
   }
 
   isReadWriteTokenValid(readWriteToken: string): boolean {
+    if (!readWriteToken.startsWith(ReadWriteTokenPrefix)) {
+      // This is necessary so read write token can be differentiated from JTW token.
+      return false;
+    }
     return !!this.accessRules.find(accessRule => {
       return accessRule.type === "readWriteToken" && accessRule.readWriteToken === readWriteToken;
     });

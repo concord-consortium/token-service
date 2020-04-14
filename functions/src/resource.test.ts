@@ -1,5 +1,5 @@
 import { S3ResourceObject, IotResourceObject, BaseResourceObject } from "./resource";
-import { AccessRule } from "./resource-types";
+import { AccessRule, ReadWriteTokenAccessRule, ReadWriteTokenPrefix } from "./resource-types";
 import { JWTClaims } from "./firestore-types";
 import { STS, AWSError } from "aws-sdk";
 
@@ -49,6 +49,29 @@ const invalidMemberAccessRules: AccessRule[] = [
     role: "member",
     platformId: "invalid-test-platform-id",
     userId: "invalid-test-user-id"
+  }
+];
+
+const invalidReadWriteTokenRules: ReadWriteTokenAccessRule[] = [
+  {
+    type: "readWriteToken",
+    readWriteToken: "invalid-prefix:test-token-1"
+  },
+  {
+    type: "readWriteToken",
+    readWriteToken: "invalid-prefix:test-token-2"
+  }
+];
+const validReadWriteToken1 = ReadWriteTokenPrefix + "test-token-1";
+const validReadWriteToken2 = ReadWriteTokenPrefix + "test-token-2";
+const validReadWriteTokenRules: ReadWriteTokenAccessRule[] = [
+  {
+    type: "readWriteToken",
+    readWriteToken: validReadWriteToken1
+  },
+  {
+    type: "readWriteToken",
+    readWriteToken: validReadWriteToken2
   }
 ];
 
@@ -189,6 +212,20 @@ describe("Resource", () => {
       });
     });
 
+    describe("#isReadWriteTokenValid", () => {
+      it("should fail if tokes don't use ReadWriteTokenPrefix", () => {
+        expect(createBaseResource(invalidReadWriteTokenRules).isReadWriteTokenValid(validReadWriteToken1)).toEqual(false);
+        expect(createBaseResource(invalidReadWriteTokenRules).isReadWriteTokenValid(validReadWriteToken2)).toEqual(false);
+      });
+      it("should fail with token don't much values in access rules", () => {
+        expect(createBaseResource(validReadWriteTokenRules).isReadWriteTokenValid("invalid-token")).toEqual(false);
+      });
+      it("should succeed with valid token", () => {
+        expect(createBaseResource(validReadWriteTokenRules).isReadWriteTokenValid(validReadWriteToken1)).toEqual(true);
+        expect(createBaseResource(validReadWriteTokenRules).isReadWriteTokenValid(validReadWriteToken2)).toEqual(true);
+      });
+    });
+
     // TODO: add tests for static Firestore member functions
   });
 
@@ -219,17 +256,20 @@ describe("Resource", () => {
         tool: "vortex",
         type: "s3Folder"
       })
-    })
+    });
     it("should not allow keys to be created without access rules", () => {
       expect(createS3Resource([]).canCreateKeys(validClaims)).toEqual(false);
+      expect(createS3Resource([]).canCreateKeys(validReadWriteToken1)).toEqual(false);
     });
 
-    it("should not allow keys to be created without valid claims", () => {
+    it("should not allow keys to be created without valid claims or readWriteToken", () => {
       expect(createS3Resource(validOwnerAccessRules).canCreateKeys(invalidClaims)).toEqual(false);
+      expect(createS3Resource(validReadWriteTokenRules).canCreateKeys("invalid-token")).toEqual(false);
     });
 
-    it("should allow keys to be created with owner claims", () => {
+    it("should allow keys to be created with owner claims or readWriteToken", () => {
       expect(createS3Resource(validOwnerAccessRules).canCreateKeys(validClaims)).toEqual(true);
+      expect(createS3Resource(validReadWriteTokenRules).canCreateKeys(validReadWriteToken1)).toEqual(true);
     });
 
     it("should create keys", async () => {
@@ -262,13 +302,15 @@ describe("Resource", () => {
       expect(createIotResource([]).canCreateKeys(validClaims)).toEqual(false);
     });
 
-    it("should not allow keys to be created without valid claims", () => {
+    it("should not allow keys to be created without valid claims or readWriteToken", () => {
       expect(createIotResource(validOwnerAccessRules).canCreateKeys(invalidClaims)).toEqual(false);
+      expect(createIotResource(validReadWriteTokenRules).canCreateKeys("invalid-token")).toEqual(false);
     });
 
     it("should allow keys to be created with owner claims", () => {
       // TODO: change toEqual to true after implementing IotResourceObject#canCreateKeys
       expect(createIotResource(validOwnerAccessRules).canCreateKeys(validClaims)).toEqual(false);
+      expect(createIotResource(validReadWriteTokenRules).canCreateKeys(validReadWriteToken1)).toEqual(false);
     });
 
     it("should create keys", async () => {
