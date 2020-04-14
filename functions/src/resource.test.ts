@@ -240,7 +240,9 @@ describe("Resource", () => {
         accessRules: [],
         bucket: "test-bucket",
         folder: "test-folder",
-        region: "test-region"
+        region: "test-region",
+        publicPath: "test-folder/test/",
+        publicUrl: "https://test-bucket.s3.amazonaws.com/test-folder/test/"
       });
     });
 
@@ -252,6 +254,8 @@ describe("Resource", () => {
         folder: "test-vortex-folder",
         id: "test",
         name: "test",
+        publicPath: "test-vortex-folder/test/",
+        publicUrl: "https://test-vortex-bucket.s3.amazonaws.com/test-vortex-folder/test/",
         region: "test-vortex-region",
         tool: "vortex",
         type: "s3Folder"

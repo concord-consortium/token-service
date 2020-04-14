@@ -2,7 +2,7 @@ import { JWTClaims, FireStoreResource, FireStoreS3Resource, FireStoreResourceSet
 import {
   ResourceType, AccessRule, AccessRuleRole, ContextAccessRule, UserAccessRule,
   FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
-  BaseResource, IotResource, ReadWriteTokenAccessRule, ReadWriteTokenPrefix
+  BaseResource, IotResource, ReadWriteTokenAccessRule, ReadWriteTokenPrefix, S3Resource
 } from "./resource-types";
 import { STS } from "aws-sdk";
 import * as crypto from "crypto";
@@ -330,11 +330,27 @@ export class S3ResourceObject extends BaseResourceObject {
     this.region = doc.region;
   }
 
-  apiResult(): S3ResourceObject {
-    const result = super.apiResult() as S3ResourceObject;
+  get publicPath() {
+    const { id, folder} = this;
+    return `${folder}/${id}/`;
+  }
+
+  get publicUrl() {
+    const { bucket } = this;
+    if (bucket === "models-resources") {
+      // use cloudfront for models resources
+      return `https://models-resources.concord.org/${this.publicPath}`;
+    }
+    return `https://${bucket}.s3.amazonaws.com/${this.publicPath}`;
+  }
+
+  apiResult(): S3Resource {
+    const result = super.apiResult() as S3Resource;
     result.bucket = this.bucket;
     result.folder = this.folder;
     result.region = this.region;
+    result.publicPath = this.publicPath;
+    result.publicUrl = this.publicUrl;
     return result;
   }
 

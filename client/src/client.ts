@@ -121,18 +121,13 @@ export class TokenServiceClient {
   }
 
   getPublicS3Path(resource: S3Resource, filename: string = "") {
-    const { id, folder} = resource;
-    return `${folder}/${id}/${filename}`;
+    const { publicPath } = resource;
+    return `${publicPath}${filename}`;
   }
 
   getPublicS3Url(resource: S3Resource, filename: string = "") {
-    const { bucket } = resource;
-    const path = this.getPublicS3Path(resource, filename);
-    if (bucket === "models-resources") {
-      // use cloudfront for models resources
-      return `https://models-resources.concord.org/${path}`;
-    }
-    return `https://${bucket}.s3.amazonaws.com/${path}`;
+    const { publicUrl } = resource;
+    return `${publicUrl}${filename}`;
   }
 
   private url(root: string, query: any = {}) {

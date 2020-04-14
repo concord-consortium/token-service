@@ -27,6 +27,8 @@ export interface S3Resource extends BaseResource {
   bucket: string;
   folder: string;
   region: string;
+  publicPath: string;
+  publicUrl: string;
 }
 
 // tslint:disable-next-line:no-empty-interface

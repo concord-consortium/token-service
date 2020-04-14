@@ -2,7 +2,7 @@ import { S3Resource, IotResource } from "./resource-types";
 
 export type FireStoreResource = FireStoreS3Resource | FireStoreIotOrganizationResource;
 
-export interface FireStoreS3Resource extends Omit<S3Resource, "id"> {
+export interface FireStoreS3Resource extends Omit<S3Resource, "id" | "publicPath" | "publicUrl"> {
   type: "s3Folder"
 }
 export interface FireStoreIotOrganizationResource extends Omit<IotResource, "id"> {
