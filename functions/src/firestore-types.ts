@@ -25,4 +25,3 @@ export interface JWTClaims {
   user_id: string | number;
   context_id?: string;
 }
-

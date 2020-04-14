@@ -28,6 +28,8 @@ const AppComponent = () => {
       setFileContent(event.target.value);
     } else if (prop === "tokenServiceEnv") {
       setTokenServiceEnv(event.target.value);
+    } else if (prop === "firebaseJwt") {
+      setFirebaseJwt(event.target.value);
     }
     localStorage.setItem(prop, event.target.value);
   };
@@ -40,8 +42,12 @@ const AppComponent = () => {
     helpers.getFirebaseJwt(portalUrl, portalAccessToken, firebaseAppName).then(token => setFirebaseJwt(token));
   };
 
-  const handleUploadFile = async () => {
+  const handleUploadFileUsingJWT = async () => {
     setFilePublicUrl(await helpers.uploadFileUsingFirebaseJWT(fileContent, firebaseJwt, tokenServiceEnv as "dev" | "staging"));
+  };
+
+  const handleUploadFileAnonymously = async () => {
+    setFilePublicUrl(await helpers.uploadFileAnonymously(fileContent, tokenServiceEnv as "dev" | "staging"));
   };
 
   return (
@@ -76,7 +82,7 @@ const AppComponent = () => {
         <p>
           <button onClick={handleGetFirebaseJwt}>Get FirebaseJWT</button>
         </p>
-        <p>Firebase JWT: {firebaseJwt && <input value={firebaseJwt} disabled={true}/> || "N/A"}</p>
+        <p>Firebase JWT: {firebaseJwt && <input value={firebaseJwt} onChange={changeText.bind(null, "firebaseJwt")}/> || "N/A"}</p>
       </div>
 
       <div className="section">
@@ -88,7 +94,10 @@ const AppComponent = () => {
         </p>
         <p><textarea value={fileContent} onChange={changeText.bind(null, "fileContent")}/></p>
         <p>
-          <button onClick={handleUploadFile}>Upload</button>
+          <button onClick={handleUploadFileUsingJWT}>Upload using Firebase JWT (Portal Setup necessary)</button>
+        </p>
+        <p>
+          <button onClick={handleUploadFileAnonymously}>Upload Anonymously (generates readWriteToken)</button>
         </p>
         {
           filePublicUrl && <a target="_blank" href={filePublicUrl}>{filePublicUrl}</a>

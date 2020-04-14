@@ -1,10 +1,10 @@
-import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource} from "../../functions/src/resource-types"
+import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource, ReadWriteTokenAccessRule} from "../../functions/src/resource-types"
 export * from "../../functions/src/resource-types";
 
 type EnvironmentName = "dev" | "staging" | "production"
 
 export interface TokenServiceClientOptions {
-  jwt: string;
+  jwt?: string;
   env?: EnvironmentName;
   serviceUrl?: string;
 }
@@ -24,7 +24,7 @@ const getEnv = (): EnvironmentName => {
     return "production";
   }
   return "dev";
-}
+};
 
 const getServiceUrlFromEnv = (env: EnvironmentName) => {
   return serviceUrls[env];
@@ -43,10 +43,10 @@ const getServiceUrlFromQueryString = () => {
     }
   }
   return undefined;
-}
+};
 
 export class TokenServiceClient {
-  public readonly jwt: string;
+  public readonly jwt: string | undefined;
   public readonly env: EnvironmentName;
   public readonly serviceUrl: string;
 
@@ -102,12 +102,22 @@ export class TokenServiceClient {
     })
   }
 
-  getCredentials(resourceId: string) {
+  getCredentials(resourceId: string, readWriteToken?: string) {
     return new Promise<Credentials>((resolve, reject) => {
-      return this.fetch("POST", this.url(`/${resourceId}/credentials`))
+      return this.fetch("POST", this.url(`/${resourceId}/credentials`), undefined, readWriteToken)
         .then(resolve)
         .catch(reject)
     })
+  }
+
+  getReadWriteToken(resource: S3Resource): string | undefined {
+    const { accessRules } = resource;
+    const readWriteTokenRules = accessRules.filter(r => r.type === "readWriteToken");
+    if (readWriteTokenRules.length > 0) {
+      // There's no reason to have more than one readWriteToken rules (so in fact multiple read write tokens).
+      // But even if that happens, it's enough to get any of them to have access to the resource.
+      return (readWriteTokenRules[0] as ReadWriteTokenAccessRule).readWriteToken;
+    }
   }
 
   getPublicS3Path(resource: S3Resource, filename: string = "") {
@@ -133,16 +143,19 @@ export class TokenServiceClient {
     return `${root}?${keyValues}`;
   }
 
-  private fetch(method: string, path: string, body?: any) {
+  private fetch(method: string, path: string, body?: any, readWriteToken?: string) {
     return new Promise<any>((resolve, reject) => {
       const url = `${this.serviceUrl}${path}`;
       const options: RequestInit = {
         method,
         headers: new Headers({
-          "Authorization": `Bearer ${this.jwt}`,
           "Content-Type": "application/json"
         })
       };
+      const authToken = readWriteToken || this.jwt;
+      if (authToken) {
+        (options.headers as Headers).set("Authorization", `Bearer ${authToken}`);
+      }
       if (body) {
         options.body = JSON.stringify(body);
       }
