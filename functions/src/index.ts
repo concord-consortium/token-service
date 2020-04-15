@@ -192,8 +192,6 @@ app.post('/api/v1/resources', (req, res) => {
       res.error(403, error);
     }
   } else {
-    // Anonymous usage based on readWriteToken. NOT RECOMMENDED apart from testing. readWriteTokens are meant to
-    // be used mostly/only to support converted Document Store documents.
     BaseResourceObject.Create(db, req.env, undefined, req.body)
       .then(resource => res.success(resource.apiResult(), 201))
       .catch(error => res.error(400, error))

@@ -213,11 +213,11 @@ describe("Resource", () => {
     });
 
     describe("#isReadWriteTokenValid", () => {
-      it("should fail if tokes don't use ReadWriteTokenPrefix", () => {
+      it("should fail if tokens don't use ReadWriteTokenPrefix", () => {
         expect(createBaseResource(invalidReadWriteTokenRules).isReadWriteTokenValid(validReadWriteToken1)).toEqual(false);
         expect(createBaseResource(invalidReadWriteTokenRules).isReadWriteTokenValid(validReadWriteToken2)).toEqual(false);
       });
-      it("should fail with token don't much values in access rules", () => {
+      it("should fail with token that don't match values in access rules", () => {
         expect(createBaseResource(validReadWriteTokenRules).isReadWriteTokenValid("invalid-token")).toEqual(false);
       });
       it("should succeed with valid token", () => {
