@@ -39,10 +39,9 @@ export const getFirebaseJwt = (portalUrl: string, portalAccessToken: string, fir
     .then(json => json.token)
 };
 
-export const uploadFileUsingFirebaseJWT = async (fileContent: string, firebaseJwt: string, tokenServiceEnv: "dev" | "staging") => {
+export const uploadFileUsingFirebaseJWT = async (filename: string, fileContent: string, firebaseJwt: string, tokenServiceEnv: "dev" | "staging") => {
   // If JWT is provided in the constructor, it'll be used in all the following requests to token-service server.
   const client = new TokenServiceClient({ jwt: firebaseJwt, env: tokenServiceEnv });
-  const filename = "test.txt";
   const resource: S3Resource = await client.createResource({
     tool: "example-app",
     type: "s3Folder",
@@ -75,9 +74,8 @@ export const uploadFileUsingFirebaseJWT = async (fileContent: string, firebaseJw
   return client.getPublicS3Url(resource, filename);
 };
 
-export const uploadFileAnonymously = async (fileContent: string, tokenServiceEnv: "dev" | "staging") => {
+export const uploadFileAnonymously = async (filename: string, fileContent: string, tokenServiceEnv: "dev" | "staging") => {
   const client = new TokenServiceClient({ env: tokenServiceEnv });
-  const filename = "test.txt";
   const resource: S3Resource = await client.createResource({
     tool: "example-app",
     type: "s3Folder",
