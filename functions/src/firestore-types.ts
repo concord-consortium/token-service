@@ -26,4 +26,8 @@ export interface JWTClaims {
   context_id?: string;
 }
 
-export type ClaimsOrRWToken = JWTClaims | string;
+export interface ReadWriteTokenClaims {
+  readWriteToken: string;
+}
+
+export type AuthClaims = JWTClaims | ReadWriteTokenClaims;

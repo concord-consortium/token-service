@@ -6,7 +6,7 @@ import * as cors from 'cors';
 import { BaseResourceObject } from './resource';
 import { getReadWriteToken } from './helpers';
 import { Config, ReadWriteTokenPrefix } from './resource-types';
-import { JWTClaims } from './firestore-types';
+import { AuthClaims, JWTClaims } from './firestore-types';
 import { verify } from 'jsonwebtoken';
 
 // insert custom data and handlers in type declarations
@@ -92,7 +92,7 @@ const getValidatedConfig = () => {
   return config;
 };
 
-const getToken = (req: express.Request) => {
+const getToken = (req: express.Request): string | undefined => {
   if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
     return req.headers.authorization.split(' ')[1];
   } else if (req.query && req.query.token) {
@@ -144,12 +144,12 @@ const authUsingJWT = (req: express.Request): JWTClaims => {
   }
 };
 
-const authUsingJWTOrReadWriteToken = (req: express.Request): JWTClaims | string => {
+const authUsingJWTOrReadWriteToken = (req: express.Request): AuthClaims => {
   const token = getToken(req);
   if (!token) {
     throw new Error("Missing token in headers, query or cookie");
   } else if (token.startsWith(ReadWriteTokenPrefix)) {
-    return token;
+    return { readWriteToken: token };
   } else {
     return getClaimsFromJWT(token);
   }
@@ -179,8 +179,8 @@ app.get('/api/v1/resources/:id', (req, res) => {
     .then(resource => {
       let result;
       try {
-        const claimsOrReadWriteToken = authUsingJWTOrReadWriteToken(req);
-        result = resource.apiResult(claimsOrReadWriteToken);
+        const claims = authUsingJWTOrReadWriteToken(req);
+        result = resource.apiResult(claims);
       } catch (error) {
         // anonymous user, that's fine, just limit API results not to include sensitive info (e.g. readWriteToken).
         result = resource.apiResult(undefined);
@@ -206,8 +206,9 @@ app.post('/api/v1/resources', (req, res) => {
     BaseResourceObject.Create(db, req.env, undefined, req.body)
       .then(resource => {
         // If resource has been created anonymously with RW token, it will be included in result.
-        const rwToken = getReadWriteToken(resource);
-        res.success(resource.apiResult(rwToken), 201);
+        const readWriteToken = getReadWriteToken(resource);
+        const claims = readWriteToken ? { readWriteToken } : undefined;
+        res.success(resource.apiResult(claims), 201);
       })
       .catch(error => res.error(400, error))
   }
@@ -215,9 +216,9 @@ app.post('/api/v1/resources', (req, res) => {
 
 app.patch('/api/v1/resources/:id', (req, res) => {
   try {
-    const claimsOrReadWriteToken = authUsingJWTOrReadWriteToken(req);
-    BaseResourceObject.Update(db, req.env, claimsOrReadWriteToken, req.params.id, req.body)
-      .then(resource => res.success(resource.apiResult(claimsOrReadWriteToken)))
+    const claims = authUsingJWTOrReadWriteToken(req);
+    BaseResourceObject.Update(db, req.env, claims, req.params.id, req.body)
+      .then(resource => res.success(resource.apiResult(claims)))
       .catch(error => res.error(400, error))
   } catch (error) {
     res.error(403, error);
@@ -226,9 +227,9 @@ app.patch('/api/v1/resources/:id', (req, res) => {
 
 app.post('/api/v1/resources/:id/credentials', (req, res) => {
   try {
-    const claimsOrReadWriteToken = authUsingJWTOrReadWriteToken(req);
+    const claims = authUsingJWTOrReadWriteToken(req);
     const config = getValidatedConfig();
-    BaseResourceObject.CreateAWSKeys(db, req.env, claimsOrReadWriteToken, req.params.id, config)
+    BaseResourceObject.CreateAWSKeys(db, req.env, claims, req.params.id, config)
       .then(awsTemporaryCredentials => res.success(awsTemporaryCredentials))
       .catch(error => res.error(400, error))
   } catch (error) {

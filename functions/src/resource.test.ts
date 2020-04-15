@@ -272,17 +272,17 @@ describe("Resource", () => {
     });
     it("should not allow keys to be created without access rules", () => {
       expect(createS3Resource([]).canCreateKeys(validClaims)).toEqual(false);
-      expect(createS3Resource([]).canCreateKeys(validReadWriteToken1)).toEqual(false);
+      expect(createS3Resource([]).canCreateKeys({ readWriteToken: validReadWriteToken1 })).toEqual(false);
     });
 
     it("should not allow keys to be created without valid claims or readWriteToken", () => {
       expect(createS3Resource(validOwnerAccessRules).canCreateKeys(invalidClaims)).toEqual(false);
-      expect(createS3Resource(validReadWriteTokenRules).canCreateKeys("invalid-token")).toEqual(false);
+      expect(createS3Resource(validReadWriteTokenRules).canCreateKeys({ readWriteToken: "invalid-token" })).toEqual(false);
     });
 
     it("should allow keys to be created with owner claims or readWriteToken", () => {
       expect(createS3Resource(validOwnerAccessRules).canCreateKeys(validClaims)).toEqual(true);
-      expect(createS3Resource(validReadWriteTokenRules).canCreateKeys(validReadWriteToken1)).toEqual(true);
+      expect(createS3Resource(validReadWriteTokenRules).canCreateKeys({ readWriteToken: validReadWriteToken1 })).toEqual(true);
     });
 
     it("should create keys", async () => {
@@ -316,13 +316,13 @@ describe("Resource", () => {
 
     it("should not allow keys to be created without valid claims or readWriteToken", () => {
       expect(createIotResource(validOwnerAccessRules).canCreateKeys(invalidClaims)).toEqual(false);
-      expect(createIotResource(validReadWriteTokenRules).canCreateKeys("invalid-token")).toEqual(false);
+      expect(createIotResource(validReadWriteTokenRules).canCreateKeys({ readWriteToken: "invalid-token" })).toEqual(false);
     });
 
     it("should allow keys to be created with owner claims", () => {
       // TODO: change toEqual to true after implementing IotResourceObject#canCreateKeys
       expect(createIotResource(validOwnerAccessRules).canCreateKeys(validClaims)).toEqual(false);
-      expect(createIotResource(validReadWriteTokenRules).canCreateKeys(validReadWriteToken1)).toEqual(false);
+      expect(createIotResource(validReadWriteTokenRules).canCreateKeys({ readWriteToken: validReadWriteToken1 })).toEqual(false);
     });
 
     it("should create keys", async () => {
