@@ -207,7 +207,7 @@ app.patch('/api/v1/resources/:id', (req, res) => {
       .then(resource => res.success(resource.apiResult()))
       .catch(error => res.error(400, error))
   } catch (error) {
-
+    res.error(403, error);
   }
 });
 
