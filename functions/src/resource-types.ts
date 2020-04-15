@@ -1,3 +1,5 @@
+export type WithOptional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+
 export interface Config {
   admin: {
     public_key: string;
@@ -10,7 +12,7 @@ export interface Config {
       duration: number;
     }
   }
-};
+}
 
 export type Resource = S3Resource | IotResource;
 
@@ -20,7 +22,7 @@ export interface BaseResource {
   description: string;
   type: ResourceType;
   tool: string;
-  accessRules: AccessRule[]
+  accessRules?: AccessRule[]
 }
 
 export interface S3Resource extends BaseResource {

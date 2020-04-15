@@ -4,6 +4,7 @@ import * as express from 'express';
 import * as bodyParser from 'body-parser';
 import * as cors from 'cors';
 import { BaseResourceObject } from './resource';
+import { getReadWriteToken } from './helpers';
 import { Config, ReadWriteTokenPrefix } from './resource-types';
 import { JWTClaims } from './firestore-types';
 import { verify } from 'jsonwebtoken';
@@ -165,7 +166,7 @@ app.get('/api/v1/resources', (req, res) => {
   try {
     const claims = authUsingJWT(req);
     BaseResourceObject.FindAll(db, req.env, claims, req.query)
-      .then(resources => resources.map((resource) => resource.apiResult()))
+      .then(resources => resources.map((resource) => resource.apiResult(claims)))
       .then(apiResults => res.success(apiResults))
       .catch(error => res.error(400, error))
   } catch (error) {
@@ -175,7 +176,17 @@ app.get('/api/v1/resources', (req, res) => {
 
 app.get('/api/v1/resources/:id', (req, res) => {
   BaseResourceObject.Find(db, req.env, req.params.id)
-    .then(resource => res.success(resource.apiResult()))
+    .then(resource => {
+      let result;
+      try {
+        const claimsOrReadWriteToken = authUsingJWTOrReadWriteToken(req);
+        result = resource.apiResult(claimsOrReadWriteToken);
+      } catch (error) {
+        // anonymous user, that's fine, just limit API results not to include sensitive info (e.g. readWriteToken).
+        result = resource.apiResult(undefined);
+      }
+      res.success(result)
+    })
     .catch(error => res.error(404, error))
 });
 
@@ -186,14 +197,18 @@ app.post('/api/v1/resources', (req, res) => {
     try {
       const claims = getClaimsFromJWT(token);
       BaseResourceObject.Create(db, req.env, claims, req.body)
-        .then(resource => res.success(resource.apiResult(), 201))
+        .then(resource => res.success(resource.apiResult(claims), 201))
         .catch(error => res.error(400, error));
     } catch (error) {
       res.error(403, error);
     }
   } else {
     BaseResourceObject.Create(db, req.env, undefined, req.body)
-      .then(resource => res.success(resource.apiResult(), 201))
+      .then(resource => {
+        // If resource has been created anonymously with RW token, it will be included in result.
+        const rwToken = getReadWriteToken(resource);
+        res.success(resource.apiResult(rwToken), 201);
+      })
       .catch(error => res.error(400, error))
   }
 });
@@ -202,7 +217,7 @@ app.patch('/api/v1/resources/:id', (req, res) => {
   try {
     const claimsOrReadWriteToken = authUsingJWTOrReadWriteToken(req);
     BaseResourceObject.Update(db, req.env, claimsOrReadWriteToken, req.params.id, req.body)
-      .then(resource => res.success(resource.apiResult()))
+      .then(resource => res.success(resource.apiResult(claimsOrReadWriteToken)))
       .catch(error => res.error(400, error))
   } catch (error) {
     res.error(403, error);

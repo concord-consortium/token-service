@@ -1,8 +1,8 @@
-import { JWTClaims, FireStoreResource, FireStoreS3Resource, FireStoreResourceSettings} from "./firestore-types";
+import { JWTClaims, FireStoreResource, FireStoreS3Resource, FireStoreResourceSettings, ClaimsOrRWToken } from "./firestore-types";
 import {
   ResourceType, AccessRule, AccessRuleRole, ContextAccessRule, UserAccessRule,
   FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
-  BaseResource, IotResource, ReadWriteTokenAccessRule, ReadWriteTokenPrefix, S3Resource
+  BaseResource, IotResource, ReadWriteTokenAccessRule, ReadWriteTokenPrefix, S3Resource, WithOptional
 } from "./resource-types";
 import { STS } from "aws-sdk";
 import * as crypto from "crypto";
@@ -34,17 +34,37 @@ export class BaseResourceObject implements BaseResource {
     this.accessRules = doc.accessRules;
   }
 
-  apiResult(): BaseResource {
-    const {id, name, description, type, tool, accessRules} = this;
-    return {id, name, description, type, tool, accessRules};
+  apiResult(claimsOrReadWriteToken: ClaimsOrRWToken | undefined): WithOptional<BaseResource, "accessRules"> {
+    // ? is not used for claimsOrReadWriteToken, so this argument is NOT optional.
+    const { id, name, description, type, tool,  } = this;
+    const result: WithOptional<BaseResource, "accessRules"> = { id, name, description, type, tool };
+    if (claimsOrReadWriteToken && this.canReadAccessRules(claimsOrReadWriteToken)) {
+      result.accessRules = this.accessRules;
+    }
+    return result;
   }
 
-  canCreateKeys(claimsOrReadWriteToken: JWTClaims | string): boolean {
-    // need to override in subclasses
-    return false;
+  canReadAccessRules(claimsOrReadWriteToken: ClaimsOrRWToken): boolean {
+    if (typeof claimsOrReadWriteToken === "string") {
+      // readWriteToken
+      return this.isReadWriteTokenValid(claimsOrReadWriteToken)
+    } else {
+      // JTW claims
+      return this.isOwner(claimsOrReadWriteToken);
+    }
   }
 
-  canUpdate(claimsOrReadWriteToken: JWTClaims | string): boolean {
+  canUpdate(claimsOrReadWriteToken: ClaimsOrRWToken): boolean {
+    if (typeof claimsOrReadWriteToken === "string") {
+      // readWriteToken
+      return this.isReadWriteTokenValid(claimsOrReadWriteToken)
+    } else {
+      // JTW claims
+      return this.isOwner(claimsOrReadWriteToken);
+    }
+  }
+
+  canCreateKeys(claimsOrReadWriteToken: ClaimsOrRWToken): boolean {
     // need to override in subclasses
     return false;
   }
@@ -57,9 +77,9 @@ export class BaseResourceObject implements BaseResource {
   }
 
   hasUserRole(claims: JWTClaims, role: AccessRuleRole): boolean {
-    return !!this.accessRules.find((accessRule) => {
-      return (accessRule.type === "user") && (accessRule.role === role) && (accessRule.userId === claims.user_id)  && (accessRule.platformId === claims.platform_id);
-    })
+    return !!this.accessRules.find((accessRule) =>
+      (accessRule.type === "user") && (accessRule.role === role) && (accessRule.userId === claims.user_id)  && (accessRule.platformId === claims.platform_id)
+    );
   }
 
   isOwner(claims: JWTClaims): boolean {
@@ -75,9 +95,9 @@ export class BaseResourceObject implements BaseResource {
       // This is necessary so read write token can be differentiated from JTW token.
       return false;
     }
-    return !!this.accessRules.find(accessRule => {
-      return accessRule.type === "readWriteToken" && accessRule.readWriteToken === readWriteToken;
-    });
+    return !!this.accessRules.find(accessRule =>
+      accessRule.type === "readWriteToken" && accessRule.readWriteToken === readWriteToken
+    );
   }
 
   static GetResourceSettings(db: FirebaseFirestore.Firestore, env: string, type: ResourceType, tool: string) {
@@ -241,7 +261,7 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static Update(db: FirebaseFirestore.Firestore, env: string, claimsOrReadWriteToken: JWTClaims | string, id: string, query: UpdateQuery) {
+  static Update(db: FirebaseFirestore.Firestore, env: string, claimsOrReadWriteToken: ClaimsOrRWToken, id: string, query: UpdateQuery) {
     return new Promise<ResourceObject>((resolve, reject) => {
       const docRef = getResourceCollection(db, env).doc(id);
       return docRef.get()
@@ -299,7 +319,7 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static CreateAWSKeys(db: FirebaseFirestore.Firestore, env: string, claimsOrReadWriteToken: JWTClaims | string, id: string, config: Config) {
+  static CreateAWSKeys(db: FirebaseFirestore.Firestore, env: string, claimsOrReadWriteToken: ClaimsOrRWToken, id: string, config: Config) {
     return new Promise<Credentials>((resolve, reject) => {
       return BaseResourceObject.Find(db, env, id)
         .then((resource) => {
@@ -344,8 +364,8 @@ export class S3ResourceObject extends BaseResourceObject {
     return `https://${bucket}.s3.amazonaws.com/${this.publicPath}`;
   }
 
-  apiResult(): S3Resource {
-    const result = super.apiResult() as S3Resource;
+  apiResult(claimsOrReadWriteToken: ClaimsOrRWToken | undefined): S3Resource {
+    const result = super.apiResult(claimsOrReadWriteToken) as S3Resource;
     result.bucket = this.bucket;
     result.folder = this.folder;
     result.region = this.region;
@@ -354,23 +374,13 @@ export class S3ResourceObject extends BaseResourceObject {
     return result;
   }
 
-  canCreateKeys(claimsOrReadWriteToken: JWTClaims | string): boolean {
+  canCreateKeys(claimsOrReadWriteToken: ClaimsOrRWToken): boolean {
     if (typeof claimsOrReadWriteToken === "string") {
       // readWriteToken
       return this.isReadWriteTokenValid(claimsOrReadWriteToken)
     } else {
       // JTW claims
       return this.isOwnerOrMember(claimsOrReadWriteToken);
-    }
-  }
-
-  canUpdate(claimsOrReadWriteToken: JWTClaims | string): boolean {
-    if (typeof claimsOrReadWriteToken === "string") {
-      // readWriteToken
-      return this.isReadWriteTokenValid(claimsOrReadWriteToken)
-    } else {
-      // JTW claims
-      return this.isOwner(claimsOrReadWriteToken);
     }
   }
 
@@ -450,18 +460,13 @@ export class S3ResourceObject extends BaseResourceObject {
 export class IotResourceObject extends BaseResourceObject {
   // TODO: add iot specific resource members
 
-  apiResult() {
-    const result = super.apiResult() as IotResource;
+  apiResult(claimsOrReadWriteToken: ClaimsOrRWToken | undefined) {
+    const result = super.apiResult(claimsOrReadWriteToken) as IotResource;
     // TODO: add superclass members to return
     return result;
   }
 
-  canCreateKeys(claimsOrReadWriteToken: JWTClaims | string): boolean {
-    // TODO: figure out permissions
-    return false;
-  }
-
-  canUpdate(claimsOrReadWriteToken: JWTClaims | string): boolean {
+  canCreateKeys(claimsOrReadWriteToken: ClaimsOrRWToken): boolean {
     // TODO: figure out permissions
     return false;
   }

@@ -2,10 +2,10 @@ import { S3Resource, IotResource } from "./resource-types";
 
 export type FireStoreResource = FireStoreS3Resource | FireStoreIotOrganizationResource;
 
-export interface FireStoreS3Resource extends Omit<S3Resource, "id" | "publicPath" | "publicUrl"> {
+export interface FireStoreS3Resource extends Required<Omit<S3Resource, "id" | "publicPath" | "publicUrl">> {
   type: "s3Folder"
 }
-export interface FireStoreIotOrganizationResource extends Omit<IotResource, "id"> {
+export interface FireStoreIotOrganizationResource extends Required<Omit<IotResource, "id">> {
   type: "iotOrganization"
 }
 
@@ -25,3 +25,5 @@ export interface JWTClaims {
   user_id: string | number;
   context_id?: string;
 }
+
+export type ClaimsOrRWToken = JWTClaims | string;

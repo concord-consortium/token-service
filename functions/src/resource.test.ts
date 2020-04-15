@@ -150,14 +150,25 @@ const createIotResource = (accessRules: AccessRule[] = []) => {
 
 describe("Resource", () => {
   describe("BaseResourceObject", () => {
-    it("should return an apiResult", () => {
-      expect(createBaseResource().apiResult()).toEqual({
-        id: "test",
-        name: "test",
-        description: "test",
-        type: "s3Folder",
-        tool: "glossary",
-        accessRules: []
+    describe("apiResult", () => {
+      it("should return an apiResult without access rules when auth claims are not provided", () => {
+        expect(createBaseResource().apiResult(undefined)).toEqual({
+          id: "test",
+          name: "test",
+          description: "test",
+          type: "s3Folder",
+          tool: "glossary"
+        });
+      });
+      it("should return an apiResult with access rules when auth claims are provided and valid", () => {
+        expect(createBaseResource(validOwnerAccessRules).apiResult(validClaims)).toEqual({
+          id: "test",
+          name: "test",
+          description: "test",
+          type: "s3Folder",
+          tool: "glossary",
+          accessRules: validOwnerAccessRules
+        });
       });
     });
 
@@ -231,13 +242,12 @@ describe("Resource", () => {
 
   describe("S3ResourceObject", () => {
     it("should return an apiResult", () => {
-      expect(createS3Resource().apiResult()).toEqual({
+      expect(createS3Resource().apiResult(undefined)).toEqual({
         id: "test",
         name: "test",
         description: "test",
         type: "s3Folder",
         tool: "glossary",
-        accessRules: [],
         bucket: "test-bucket",
         folder: "test-folder",
         region: "test-region",
@@ -247,8 +257,7 @@ describe("Resource", () => {
     });
 
     it("should be capable of creating vortex configurations", () => {
-      expect(createS3VortexConfig().apiResult()).toEqual({
-        accessRules: [],
+      expect(createS3VortexConfig().apiResult(undefined)).toEqual({
         bucket: "test-vortex-bucket",
         description: "test",
         folder: "test-vortex-folder",
@@ -292,13 +301,12 @@ describe("Resource", () => {
 
   describe("IotResourceObject", () => {
     it("should return an apiResult", () => {
-      expect(createIotResource().apiResult()).toEqual({
+      expect(createIotResource().apiResult(undefined)).toEqual({
         id: "test",
         name: "test",
         description: "test",
         type: "iotOrganization",
-        tool: "dataFlow",
-        accessRules: []
+        tool: "dataFlow"
       });
     });
 
@@ -322,5 +330,4 @@ describe("Resource", () => {
       await expect(createIotResource().createKeys(config)).rejects.toEqual("TODO: implement create keys");
     });
   });
-
 });
