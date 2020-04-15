@@ -79,7 +79,7 @@ export class TokenServiceClient {
 
   createResource(options: CreateQuery) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("POST", this.url("/"), options)
+      return this.fetch("POST", this.url("/"), { body: options })
         .then(resolve)
         .catch(reject)
     })
@@ -87,7 +87,7 @@ export class TokenServiceClient {
 
   updateResource(resourceId: string, options: UpdateQuery) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("PATCH", this.url(`/${resourceId}`), options)
+      return this.fetch("PATCH", this.url(`/${resourceId}`), { body: options })
         .then(resolve)
         .catch(reject)
     })
@@ -104,7 +104,7 @@ export class TokenServiceClient {
 
   getCredentials(resourceId: string, readWriteToken?: string) {
     return new Promise<Credentials>((resolve, reject) => {
-      return this.fetch("POST", this.url(`/${resourceId}/credentials`), undefined, readWriteToken)
+      return this.fetch("POST", this.url(`/${resourceId}/credentials`), { readWriteToken })
         .then(resolve)
         .catch(reject)
     })
@@ -138,23 +138,23 @@ export class TokenServiceClient {
     return `${root}?${keyValues}`;
   }
 
-  private fetch(method: string, path: string, body?: any, readWriteToken?: string) {
+  private fetch(method: string, path: string, options?: { body?: any, readWriteToken?: string }) {
     return new Promise<any>((resolve, reject) => {
       const url = `${this.serviceUrl}${path}`;
-      const options: RequestInit = {
+      const requestOptions: RequestInit = {
         method,
         headers: new Headers({
           "Content-Type": "application/json"
         })
       };
-      const authToken = readWriteToken || this.jwt;
+      const authToken = options?.readWriteToken || this.jwt;
       if (authToken) {
-        (options.headers as Headers).set("Authorization", `Bearer ${authToken}`);
+        (requestOptions.headers as Headers).set("Authorization", `Bearer ${authToken}`);
       }
-      if (body) {
-        options.body = JSON.stringify(body);
+      if (options?.body) {
+        requestOptions.body = JSON.stringify(options.body);
       }
-      return fetch(url, options)
+      return fetch(url, requestOptions)
         .then((resp) => resp.json())
         .then((json) => {
           if (json.status === "success") {
