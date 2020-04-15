@@ -135,16 +135,7 @@ const getClaimsFromJWT = (token: string): JWTClaims => {
   }
 };
 
-const authUsingJWT = (req: express.Request): JWTClaims => {
-  const token = getToken(req);
-  if (!token) {
-    throw new Error("Missing token in headers, query or cookie");
-  } else {
-    return getClaimsFromJWT(token);
-  }
-};
-
-const authUsingJWTOrReadWriteToken = (req: express.Request): AuthClaims => {
+const authenticate = (req: express.Request): AuthClaims => {
   const token = getToken(req);
   if (!token) {
     throw new Error("Missing token in headers, query or cookie");
@@ -160,19 +151,19 @@ const optionallyAuthUsingJWT = (req: express.Request): JWTClaims | undefined => 
   if (token) {
     // If token is present, check it and validate. Not that at this point exceptions might be thrown.
     // Do not fallback to anonymous path if token is malformed.
-    return authUsingJWT(req);
+    return getClaimsFromJWT(token);
   } else {
     // If token is not present, it means that it's anonymous user.
     return undefined;
   }
 }
 
-const optionallyAuthUsingJWTOrReadWriteToken = (req: express.Request): AuthClaims | undefined => {
+const optionallyAuthenticate = (req: express.Request): AuthClaims | undefined => {
   const token = getToken(req);
   if (token) {
     // If token is present, check it and validate. Not that at this point exceptions might be thrown.
     // Do not fallback to anonymous path if token is malformed.
-    return authUsingJWTOrReadWriteToken(req);
+    return authenticate(req);
   } else {
     // If token is not present, it means that it's anonymous user.
     return undefined;
@@ -202,7 +193,7 @@ app.get('/api/v1/resources', (req, res) => {
 
 app.get('/api/v1/resources/:id', (req, res) => {
   try {
-    const claims = optionallyAuthUsingJWTOrReadWriteToken(req);
+    const claims = optionallyAuthenticate(req);
     BaseResourceObject.Find(db, req.env, req.params.id)
       .then(resource => res.success(resource.apiResult(claims)))
       .catch(error => res.error(404, error))
@@ -219,7 +210,7 @@ app.post('/api/v1/resources', (req, res) => {
       .then(resource => {
         let authClaims: AuthClaims | undefined = claims;
         if (!authClaims) {
-          // If resource has been created anonymously with RW token, it will be included in result.
+          // Generate auth claims if resource has been created anonymously to return readWriteToken to the owner.
           const readWriteToken = getReadWriteToken(resource);
           authClaims = readWriteToken ? { readWriteToken } : undefined;
         }
@@ -234,7 +225,7 @@ app.post('/api/v1/resources', (req, res) => {
 
 app.patch('/api/v1/resources/:id', (req, res) => {
   try {
-    const claims = authUsingJWTOrReadWriteToken(req);
+    const claims = authenticate(req);
     BaseResourceObject.Update(db, req.env, claims, req.params.id, req.body)
       .then(resource => res.success(resource.apiResult(claims)))
       .catch(error => res.error(400, error))
@@ -245,7 +236,7 @@ app.patch('/api/v1/resources/:id', (req, res) => {
 
 app.post('/api/v1/resources/:id/credentials', (req, res) => {
   try {
-    const claims = authUsingJWTOrReadWriteToken(req);
+    const claims = authenticate(req);
     const config = getValidatedConfig();
     BaseResourceObject.CreateAWSKeys(db, req.env, claims, req.params.id, config)
       .then(awsTemporaryCredentials => res.success(awsTemporaryCredentials))
@@ -257,7 +248,7 @@ app.post('/api/v1/resources/:id/credentials', (req, res) => {
 
 app.delete('/api/v1/resources/:id', (req, res) => {
   try {
-    const claims = authUsingJWT(req); // note that readWriteToken intentionally does NOT give access to delete method
+    const claims = authenticate(req);
     BaseResourceObject
       .delete(db, req.env, claims, req.params.id, req.body)
       .then(deleteDate => res.success({ date: deleteDate }))

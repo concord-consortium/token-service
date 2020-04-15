@@ -56,8 +56,19 @@ export class BaseResourceObject implements BaseResource {
 
   canUpdate(claims: AuthClaims): boolean {
     if ("readWriteToken" in claims) {
-      // readWriteToken
-      return this.isReadWriteTokenValid(claims.readWriteToken)
+      // readWriteToken is restricted on purpose. Owner could accidentally remove access for the resource for himself
+      // and other owners (by modifying access rules). Or he could use incorrect read write token format.
+      return false;
+    } else {
+      // JTW claims
+      return this.isOwner(claims);
+    }
+  }
+
+  canDelete(claims: AuthClaims): boolean {
+    if ("readWriteToken" in claims) {
+      // readWriteToken is restricted on purpose. Owner could accidentally remove shared resource for other owners.
+      return false;
     } else {
       // JTW claims
       return this.isOwner(claims);
@@ -297,14 +308,14 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static delete(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, id: string, query: UpdateQuery) {
+  static delete(db: FirebaseFirestore.Firestore, env: string, claims: AuthClaims, id: string, query: UpdateQuery) {
     return new Promise<Date>((resolve, reject) => {
       const docRef = getResourceCollection(db, env).doc(id);
       docRef.get()
       .then( (docSnapshot) => {
         if (docSnapshot.exists) {
           const resource = BaseResourceObject.FromDocumentSnapshot(docSnapshot);
-          if (resource.isOwner(claims)) {
+          if (resource.canDelete(claims)) {
               docRef.delete()
               .then(deleteResult => resolve(deleteResult.writeTime.toDate()))
               .catch(e => reject(`Firebase err on delete: ${e}`));
