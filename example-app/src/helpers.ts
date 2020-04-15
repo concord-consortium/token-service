@@ -1,6 +1,7 @@
 import ClientOAuth2 from "client-oauth2";
 import { TokenServiceClient, S3Resource, Credentials } from "@concord-consortium/token-service";
 import * as AWS from "aws-sdk";
+import { ResourceType } from "../../functions/src/resource-types";
 
 // This file provides simple recipes showing how to use TokenServiceClient and how to get other necessary
 // prerequisites (auth in Portal, firebase JWT).
@@ -109,4 +110,14 @@ export const uploadFileAnonymously = async (filename: string, fileContent: strin
   console.log(result);
 
   return client.getPublicS3Url(resource, filename);
+};
+
+export const logAllResources = async (firebaseJwt: string, amOwner: boolean, tokenServiceEnv: "dev" | "staging") => {
+  const client = new TokenServiceClient({ jwt: firebaseJwt, env: tokenServiceEnv });
+  const resources = await client.listResources({
+    type: "s3Folder",
+    tool: "example-app",
+    amOwner: amOwner ? "true" : "false"
+  });
+  console.log(resources);
 };

@@ -143,23 +143,22 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static FindAll(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, query: FindAllQuery) {
+  static FindAll(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims | undefined, query: FindAllQuery) {
     return new Promise<ResourceObject[]>((resolve, reject) => {
       const {name, type, tool, amOwner} = query;
       const checkForOwner = amOwner === 'true';
-      const collectionRef = getResourceCollection(db, env);
-      let whereQuery : FirebaseFirestore.Query | null = null;
+      let fbQuery: FirebaseFirestore.Query = getResourceCollection(db, env);
 
-      if (name) whereQuery = (whereQuery || collectionRef).where("name", "==", name);
-      if (type) whereQuery = (whereQuery || collectionRef).where("type", "==", type);
-      if (tool) whereQuery = (whereQuery || collectionRef).where("tool", "==", tool);
+      if (name) fbQuery = fbQuery.where("name", "==", name);
+      if (type) fbQuery = fbQuery.where("type", "==", type);
+      if (tool) fbQuery = fbQuery.where("tool", "==", tool);
 
-      return (whereQuery || collectionRef).get()
+      return fbQuery.get()
         .then((querySnapshot) => {
           const resources: ResourceObject[] = [];
           querySnapshot.forEach((docSnapshot) => {
             const resource = BaseResourceObject.FromDocumentSnapshot(docSnapshot);
-            if (!checkForOwner || resource.isOwner(claims)) {
+            if (!checkForOwner || claims && resource.isOwner(claims)) {
               resources.push(resource);
             }
           });

@@ -53,6 +53,14 @@ const AppComponent = () => {
     setFilePublicUrl(await helpers.uploadFileAnonymously(filename, fileContent, tokenServiceEnv as "dev" | "staging"));
   };
 
+  const handleLogAllMyResources = () => {
+    helpers.logAllResources(firebaseJwt, true, tokenServiceEnv as "dev" | "staging");
+  };
+
+  const handleLogAllResources = () => {
+    helpers.logAllResources(firebaseJwt, false, tokenServiceEnv as "dev" | "staging");
+  };
+
   return (
     <div>
       <div className="section">
@@ -105,6 +113,12 @@ const AppComponent = () => {
         {
           filePublicUrl && <a target="_blank" href={filePublicUrl}>{filePublicUrl}</a>
         }
+      </div>
+
+      <div className="section">
+        <h3>Misc</h3>
+        <p><button onClick={handleLogAllMyResources}>Log All My Resources</button></p>
+        <p><button onClick={handleLogAllResources}>Log All Resources</button></p>
       </div>
     </div>
   );

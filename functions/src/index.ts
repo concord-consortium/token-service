@@ -155,6 +155,30 @@ const authUsingJWTOrReadWriteToken = (req: express.Request): AuthClaims => {
   }
 };
 
+const optionallyAuthUsingJWT = (req: express.Request): JWTClaims | undefined => {
+  const token = getToken(req);
+  if (token) {
+    // If token is present, check it and validate. Not that at this point exceptions might be thrown.
+    // Do not fallback to anonymous path if token is malformed.
+    return authUsingJWT(req);
+  } else {
+    // If token is not present, it means that it's anonymous user.
+    return undefined;
+  }
+}
+
+const optionallyAuthUsingJWTOrReadWriteToken = (req: express.Request): AuthClaims | undefined => {
+  const token = getToken(req);
+  if (token) {
+    // If token is present, check it and validate. Not that at this point exceptions might be thrown.
+    // Do not fallback to anonymous path if token is malformed.
+    return authUsingJWTOrReadWriteToken(req);
+  } else {
+    // If token is not present, it means that it's anonymous user.
+    return undefined;
+  }
+}
+
 app.use(customHandlers);
 app.use(genericErrorHandler);
 app.use(bodyParser.json());
@@ -164,53 +188,47 @@ app.use(checkEnv);
 
 app.get('/api/v1/resources', (req, res) => {
   try {
-    const claims = authUsingJWT(req);
+    // Auth/claims are optional and necessary only if user wants to see more details or his own resources only.
+    const claims = optionallyAuthUsingJWT(req);
     BaseResourceObject.FindAll(db, req.env, claims, req.query)
       .then(resources => resources.map((resource) => resource.apiResult(claims)))
       .then(apiResults => res.success(apiResults))
       .catch(error => res.error(400, error))
   } catch (error) {
-    res.error(403, error)
+    // Auth token must have been malformed. In this case return 403 error, don't fallback to anonymous path.
+    res.error(403, error);
   }
 });
 
 app.get('/api/v1/resources/:id', (req, res) => {
-  BaseResourceObject.Find(db, req.env, req.params.id)
-    .then(resource => {
-      let result;
-      try {
-        const claims = authUsingJWTOrReadWriteToken(req);
-        result = resource.apiResult(claims);
-      } catch (error) {
-        // anonymous user, that's fine, just limit API results not to include sensitive info (e.g. readWriteToken).
-        result = resource.apiResult(undefined);
-      }
-      res.success(result)
-    })
-    .catch(error => res.error(404, error))
+  try {
+    const claims = optionallyAuthUsingJWTOrReadWriteToken(req);
+    BaseResourceObject.Find(db, req.env, req.params.id)
+      .then(resource => res.success(resource.apiResult(claims)))
+      .catch(error => res.error(404, error))
+  } catch (error) {
+    // Auth token must have been malformed. In this case return 403 error, don't fallback to anonymous path.
+    res.error(403, error);
+  }
 });
 
 app.post('/api/v1/resources', (req, res) => {
-  // Note that this is the only route where auth is not called directly. Resource can be created anonymously.
-  const token = getToken(req);
-  if (token) {
-    try {
-      const claims = getClaimsFromJWT(token);
-      BaseResourceObject.Create(db, req.env, claims, req.body)
-        .then(resource => res.success(resource.apiResult(claims), 201))
-        .catch(error => res.error(400, error));
-    } catch (error) {
-      res.error(403, error);
-    }
-  } else {
-    BaseResourceObject.Create(db, req.env, undefined, req.body)
+  try {
+    const claims = optionallyAuthUsingJWT(req);
+    BaseResourceObject.Create(db, req.env, claims, req.body)
       .then(resource => {
-        // If resource has been created anonymously with RW token, it will be included in result.
-        const readWriteToken = getReadWriteToken(resource);
-        const claims = readWriteToken ? { readWriteToken } : undefined;
-        res.success(resource.apiResult(claims), 201);
+        let authClaims: AuthClaims | undefined = claims;
+        if (!authClaims) {
+          // If resource has been created anonymously with RW token, it will be included in result.
+          const readWriteToken = getReadWriteToken(resource);
+          authClaims = readWriteToken ? { readWriteToken } : undefined;
+        }
+        res.success(resource.apiResult(authClaims), 201);
       })
-      .catch(error => res.error(400, error))
+      .catch(error => res.error(400, error));
+  } catch (error) {
+    // Auth token must have been malformed. In this case return 403 error, don't fallback to anonymous path.
+    res.error(403, error);
   }
 });
 
