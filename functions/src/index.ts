@@ -149,7 +149,7 @@ const authenticate = (req: express.Request): AuthClaims => {
 const optionallyAuthUsingJWT = (req: express.Request): JWTClaims | undefined => {
   const token = getToken(req);
   if (token) {
-    // If token is present, check it and validate. Not that at this point exceptions might be thrown.
+    // If token is present, check it and validate. Note that at this point exceptions might be thrown.
     // Do not fallback to anonymous path if token is malformed.
     return getClaimsFromJWT(token);
   } else {
