@@ -95,7 +95,8 @@ The entry should look like this:
   region: "us-east-1",
   tool: "example-app",
   type: "s3Folder",
-  allowedAccessRuleTypes: ["user", "context"] // optionally "readWriteToken", check AccessRuleType type for all allowed values
+  allowedAccessRuleTypes: ["user", "context"], // optionally "readWriteToken", check AccessRuleType type for all allowed values
+  domain: "https://cloudfront.domain.com" // optionally domain that will be used to construct public URL, usually a cloudfront domain
 ```
 
 ## Development Setup
