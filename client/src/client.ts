@@ -1,5 +1,5 @@
 import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource, ReadWriteTokenAccessRule} from "../../functions/src/resource-types"
-import { getReadWriteToken } from "../../functions/src/helpers";
+import { getRWTokenFromAccessRules } from "../../functions/src/helpers";
 export * from "../../functions/src/resource-types";
 
 type EnvironmentName = "dev" | "staging" | "production"
@@ -112,7 +112,7 @@ export class TokenServiceClient {
   }
 
   getReadWriteToken(resource: S3Resource): string | undefined {
-    return getReadWriteToken(resource);
+    return getRWTokenFromAccessRules(resource);
   }
 
   getPublicS3Path(resource: S3Resource, filename: string = "") {

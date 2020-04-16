@@ -1,7 +1,6 @@
 import ClientOAuth2 from "client-oauth2";
-import { TokenServiceClient, S3Resource, Credentials } from "@concord-consortium/token-service";
+import { TokenServiceClient, S3Resource } from "@concord-consortium/token-service";
 import * as AWS from "aws-sdk";
-import { ResourceType } from "../../functions/src/resource-types";
 
 // This file provides simple recipes showing how to use TokenServiceClient and how to get other necessary
 // prerequisites (auth in Portal, firebase JWT).

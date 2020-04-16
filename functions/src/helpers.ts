@@ -1,6 +1,6 @@
 import { BaseResource, ReadWriteTokenAccessRule } from "./resource-types";
 
-export const getReadWriteToken = (resource: BaseResource): string | undefined => {
+export const getRWTokenFromAccessRules = (resource: BaseResource): string | undefined => {
   if (!resource.accessRules) {
     return undefined;
   }

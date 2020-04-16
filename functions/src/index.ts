@@ -4,7 +4,7 @@ import * as express from 'express';
 import * as bodyParser from 'body-parser';
 import * as cors from 'cors';
 import { BaseResourceObject } from './resource';
-import { getReadWriteToken } from './helpers';
+import { getRWTokenFromAccessRules } from './helpers';
 import { Config, ReadWriteTokenPrefix } from './resource-types';
 import { AuthClaims, JWTClaims } from './firestore-types';
 import { verify } from 'jsonwebtoken';
@@ -211,7 +211,7 @@ app.post('/api/v1/resources', (req, res) => {
         let authClaims: AuthClaims | undefined = claims;
         if (!authClaims) {
           // Generate auth claims if resource has been created anonymously to return readWriteToken to the owner.
-          const readWriteToken = getReadWriteToken(resource);
+          const readWriteToken = getRWTokenFromAccessRules(resource);
           authClaims = readWriteToken ? { readWriteToken } : undefined;
         }
         res.success(resource.apiResult(authClaims), 201);
