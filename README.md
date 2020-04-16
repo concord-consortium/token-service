@@ -94,7 +94,8 @@ The entry should look like this:
   folder: "example-app",   // good idea to match `tool` below.
   region: "us-east-1",
   tool: "example-app",
-  type: "s3Folder"
+  type: "s3Folder",
+  allowedAccessRuleTypes: ["user", "context"] // optionally "readWriteToken", check AccessRuleType type for all allowed values
 ```
 
 ## Development Setup

@@ -1,8 +1,11 @@
-import { JWTClaims, FireStoreResource, FireStoreS3Resource, FireStoreResourceSettings} from "./firestore-types";
-import { ResourceType, AccessRule, AccessRuleRole, ContextAccessRule, UserAccessRule,
-         FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
-         BaseResource, IotResource } from "./resource-types";
+import { JWTClaims, FireStoreResource, FireStoreS3Resource, FireStoreResourceSettings, AuthClaims } from "./firestore-types";
+import {
+  ResourceType, AccessRule, AccessRuleRole, ContextAccessRule, UserAccessRule,
+  FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
+  BaseResource, IotResource, ReadWriteTokenAccessRule, ReadWriteTokenPrefix, S3Resource, WithOptional
+} from "./resource-types";
 import { STS } from "aws-sdk";
+import * as crypto from "crypto";
 
 const RESOURCE_COLLECTION_ID = 'resources';
 const RESOURCE_SETTINGS_COLLECTION_ID = 'resourceSettings';
@@ -31,12 +34,48 @@ export class BaseResourceObject implements BaseResource {
     this.accessRules = doc.accessRules;
   }
 
-  apiResult(): BaseResource {
-    const {id, name, description, type, tool, accessRules} = this;
-    return {id, name, description, type, tool, accessRules};
+  apiResult(claims: AuthClaims | undefined): WithOptional<BaseResource, "accessRules"> {
+    // ? is not used for claims, so this argument is NOT optional.
+    const { id, name, description, type, tool } = this;
+    const result: WithOptional<BaseResource, "accessRules"> = { id, name, description, type, tool };
+    if (claims && this.canReadAccessRules(claims)) {
+      result.accessRules = this.accessRules;
+    }
+    return result;
   }
 
-  canCreateKeys(claims: JWTClaims): boolean {
+  canReadAccessRules(claims: AuthClaims): boolean {
+    if ("readWriteToken" in claims) {
+      // readWriteToken
+      return this.isReadWriteTokenValid(claims.readWriteToken)
+    } else {
+      // JTW claims
+      return this.isOwner(claims);
+    }
+  }
+
+  canUpdate(claims: AuthClaims): boolean {
+    if ("readWriteToken" in claims) {
+      // readWriteToken is restricted on purpose. Owner could accidentally remove access for the resource for himself
+      // and other owners (by modifying access rules). Or he could use incorrect read write token format.
+      return false;
+    } else {
+      // JTW claims
+      return this.isOwner(claims);
+    }
+  }
+
+  canDelete(claims: AuthClaims): boolean {
+    if ("readWriteToken" in claims) {
+      // readWriteToken is restricted on purpose. Owner could accidentally remove shared resource for other owners.
+      return false;
+    } else {
+      // JTW claims
+      return this.isOwner(claims);
+    }
+  }
+
+  canCreateKeys(claims: AuthClaims): boolean {
     // need to override in subclasses
     return false;
   }
@@ -49,9 +88,9 @@ export class BaseResourceObject implements BaseResource {
   }
 
   hasUserRole(claims: JWTClaims, role: AccessRuleRole): boolean {
-    return !!this.accessRules.find((accessRule) => {
-      return (accessRule.type === "user") && (accessRule.role === role) && (accessRule.userId === claims.user_id)  && (accessRule.platformId === claims.platform_id);
-    })
+    return !!this.accessRules.find((accessRule) =>
+      (accessRule.type === "user") && (accessRule.role === role) && (accessRule.userId === claims.user_id)  && (accessRule.platformId === claims.platform_id)
+    );
   }
 
   isOwner(claims: JWTClaims): boolean {
@@ -60,6 +99,16 @@ export class BaseResourceObject implements BaseResource {
 
   isOwnerOrMember(claims: JWTClaims): boolean {
     return this.hasUserRole(claims, "owner") || this.hasUserRole(claims, "member");
+  }
+
+  isReadWriteTokenValid(readWriteToken: string): boolean {
+    if (!readWriteToken.startsWith(ReadWriteTokenPrefix)) {
+      // This is necessary so read write token can be differentiated from JTW token.
+      return false;
+    }
+    return !!this.accessRules.find(accessRule =>
+      accessRule.type === "readWriteToken" && accessRule.readWriteToken === readWriteToken
+    );
   }
 
   static GetResourceSettings(db: FirebaseFirestore.Firestore, env: string, type: ResourceType, tool: string) {
@@ -105,23 +154,22 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static FindAll(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, query: FindAllQuery) {
+  static FindAll(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims | undefined, query: FindAllQuery) {
     return new Promise<ResourceObject[]>((resolve, reject) => {
       const {name, type, tool, amOwner} = query;
       const checkForOwner = amOwner === 'true';
-      const collectionRef = getResourceCollection(db, env);
-      let whereQuery : FirebaseFirestore.Query | null = null;
+      let fbQuery: FirebaseFirestore.Query = getResourceCollection(db, env);
 
-      if (name) whereQuery = (whereQuery || collectionRef).where("name", "==", name);
-      if (type) whereQuery = (whereQuery || collectionRef).where("type", "==", type);
-      if (tool) whereQuery = (whereQuery || collectionRef).where("tool", "==", tool);
+      if (name) fbQuery = fbQuery.where("name", "==", name);
+      if (type) fbQuery = fbQuery.where("type", "==", type);
+      if (tool) fbQuery = fbQuery.where("tool", "==", tool);
 
-      return (whereQuery || collectionRef).get()
+      return fbQuery.get()
         .then((querySnapshot) => {
           const resources: ResourceObject[] = [];
           querySnapshot.forEach((docSnapshot) => {
             const resource = BaseResourceObject.FromDocumentSnapshot(docSnapshot);
-            if (!checkForOwner || resource.isOwner(claims)) {
+            if (!checkForOwner || claims && resource.isOwner(claims)) {
               resources.push(resource);
             }
           });
@@ -131,73 +179,102 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static Create(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, query: CreateQuery) {
+  static Create(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims | undefined, query: CreateQuery) {
     return new Promise<ResourceObject>((resolve, reject) => {
       const {name, description, type, tool, accessRuleType, accessRuleRole} = query;
-      if (!name || !description || !type || !tool || !accessRuleType || !accessRuleRole) {
+      if (!name || !description || !type || !tool || !accessRuleType) {
         reject("One or more missing resource fields!");
         return;
       }
-      else {
-        const {user_id: userId, platform_id: platformId, context_id: contextId} = claims;
-        if ((accessRuleType === "context") && !contextId) {
-          reject("Missing context_id claim in JWT!");
-          return;
-        }
-
-        const accessRules = accessRuleType === "context"
-          ? [{type: "context", role: accessRuleRole, contextId, platformId}] as ContextAccessRule[]
-          : [{type: "user", role: accessRuleRole, userId, platformId}] as UserAccessRule[];
-
-        return BaseResourceObject.GetResourceSettings(db, env, type, tool)
-          .then((settings) => {
-            let newResource: FireStoreResource;
-            switch (type) {
-              case "s3Folder":
-                const {bucket, folder, region} = settings;
-                newResource = {
-                  type: "s3Folder",
-                  tool,
-                  name,
-                  description,
-                  accessRules,
-                  bucket,
-                  folder,
-                  region
-                }
-                break;
-
-              case "iotOrganization":
-                if (!(tool === "dataFlow")) {
-                  reject(`Unknown iotOrganization tool: ${tool}`);
-                  return;
-                }
-                newResource = {
-                  type: "iotOrganization",
-                  tool,
-                  name,
-                  description,
-                  accessRules
-                }
-                break;
-
-              default:
-                reject(`Unknown resource type: ${type}`);
-                return;
+      return BaseResourceObject.GetResourceSettings(db, env, type, tool)
+        .then((settings) => {
+          let accessRules: AccessRule[] = [];
+          if (!settings.allowedAccessRuleTypes) {
+            reject(`${tool} configuration is missing allowedAccessRuleTypes list!`);
+            return;
+          }
+          if (settings.allowedAccessRuleTypes.indexOf(accessRuleType) === -1) {
+            reject(`"${accessRuleType}" access rule type is not allowed by ${tool} settings!`);
+            return;
+          }
+          if (accessRuleType === "user") {
+            if (!accessRuleRole) {
+              reject("accessRuleRole fields missing!");
+              return;
             }
+            if (!claims) {
+              reject("JWT claims missing!");
+              return;
+            }
+            const { user_id: userId, platform_id: platformId } = claims;
+            accessRules = [{type: "user", role: accessRuleRole, userId, platformId}] as UserAccessRule[];
+          }
+          else if (accessRuleType === "context") {
+            if (!accessRuleRole) {
+              reject("accessRuleRole fields missing!");
+              return;
+            }
+            if (!claims) {
+              reject("JWT claims missing!");
+              return;
+            }
+            const { platform_id: platformId, context_id: contextId } = claims;
+            if (!contextId) {
+              reject("Missing context_id claim in JWT!");
+              return;
+            }
+            accessRules = [{type: "context", role: accessRuleRole, contextId, platformId}] as ContextAccessRule[];
+          }
+          else if (accessRuleType === "readWriteToken") {
+            // Generating new readWriteTokens is not recommended, they've been implemented to support documents imported
+            // from the Document Store. ReadWriteTokenPrefix is necessary so auth methods can differentiate it from
+            // regular JWT token. "token-service-generated:" is added just in case we want to easily find tokens/resources
+            // generated by token-service itself or by Document Store migration.
+            const readWriteToken = ReadWriteTokenPrefix + "token-service-generated:" + crypto.randomBytes(128).toString('hex');
+            accessRules = [{type: "readWriteToken", readWriteToken}] as ReadWriteTokenAccessRule[];
+          }
+          let newResource: FireStoreResource;
+          switch (settings.type) {
+            case "s3Folder":
+              const {bucket, folder, region} = settings;
+              newResource = {
+                type: "s3Folder",
+                tool,
+                name,
+                description,
+                accessRules,
+                bucket,
+                folder,
+                region
+              };
+              break;
 
-            return getResourceCollection(db, env).add(newResource)
-              .then((docRef) => docRef.get())
-              .then((docSnapshot) => BaseResourceObject.FromDocumentSnapshot(docSnapshot))
-              .then(resolve)
-              .catch(reject)
-          })
-          .catch(reject)
-      }
+            case "iotOrganization":
+              newResource = {
+                type: "iotOrganization",
+                tool,
+                name,
+                description,
+                accessRules
+              };
+              break;
+
+            default:
+              reject(`Unknown resource type: ${type}`);
+              return;
+          }
+
+          return getResourceCollection(db, env).add(newResource)
+            .then((docRef) => docRef.get())
+            .then((docSnapshot) => BaseResourceObject.FromDocumentSnapshot(docSnapshot))
+            .then(resolve)
+            .catch(reject)
+        })
+        .catch(reject)
     });
   }
 
-  static Update(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, id: string, query: UpdateQuery) {
+  static Update(db: FirebaseFirestore.Firestore, env: string, claims: AuthClaims, id: string, query: UpdateQuery) {
     return new Promise<ResourceObject>((resolve, reject) => {
       const docRef = getResourceCollection(db, env).doc(id);
       return docRef.get()
@@ -205,7 +282,7 @@ export class BaseResourceObject implements BaseResource {
           if (docSnapshot.exists) {
 
             const resource = BaseResourceObject.FromDocumentSnapshot(docSnapshot);
-            if (resource.isOwner(claims)) {
+            if (resource.canUpdate(claims)) {
               const {name, description, accessRules} = query;
               const update: UpdateQuery = {};
               if (name) update.name = name;
@@ -231,14 +308,14 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static delete(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, id: string, query: UpdateQuery) {
+  static delete(db: FirebaseFirestore.Firestore, env: string, claims: AuthClaims, id: string, query: UpdateQuery) {
     return new Promise<Date>((resolve, reject) => {
       const docRef = getResourceCollection(db, env).doc(id);
       docRef.get()
       .then( (docSnapshot) => {
         if (docSnapshot.exists) {
           const resource = BaseResourceObject.FromDocumentSnapshot(docSnapshot);
-          if (resource.isOwner(claims)) {
+          if (resource.canDelete(claims)) {
               docRef.delete()
               .then(deleteResult => resolve(deleteResult.writeTime.toDate()))
               .catch(e => reject(`Firebase err on delete: ${e}`));
@@ -255,7 +332,7 @@ export class BaseResourceObject implements BaseResource {
     });
   }
 
-  static CreateAWSKeys(db: FirebaseFirestore.Firestore, env: string, claims: JWTClaims, id: string, config: Config) {
+  static CreateAWSKeys(db: FirebaseFirestore.Firestore, env: string, claims: AuthClaims, id: string, config: Config) {
     return new Promise<Credentials>((resolve, reject) => {
       return BaseResourceObject.Find(db, env, id)
         .then((resource) => {
@@ -286,16 +363,38 @@ export class S3ResourceObject extends BaseResourceObject {
     this.region = doc.region;
   }
 
-  apiResult(): S3ResourceObject {
-    const result = super.apiResult() as S3ResourceObject;
+  get publicPath() {
+    const { id, folder} = this;
+    return `${folder}/${id}/`;
+  }
+
+  get publicUrl() {
+    const { bucket } = this;
+    if (bucket === "models-resources") {
+      // use cloudfront for models resources
+      return `https://models-resources.concord.org/${this.publicPath}`;
+    }
+    return `https://${bucket}.s3.amazonaws.com/${this.publicPath}`;
+  }
+
+  apiResult(claims: AuthClaims | undefined): S3Resource {
+    const result = super.apiResult(claims) as S3Resource;
     result.bucket = this.bucket;
     result.folder = this.folder;
     result.region = this.region;
+    result.publicPath = this.publicPath;
+    result.publicUrl = this.publicUrl;
     return result;
   }
 
-  canCreateKeys(claims: JWTClaims): boolean {
-    return this.isOwnerOrMember(claims);
+  canCreateKeys(claims: AuthClaims): boolean {
+    if ("readWriteToken" in claims) {
+      // readWriteToken
+      return this.isReadWriteTokenValid(claims.readWriteToken);
+    } else {
+      // JTW claims
+      return this.isOwnerOrMember(claims);
+    }
   }
 
   createKeys(config: Config) {
@@ -374,13 +473,13 @@ export class S3ResourceObject extends BaseResourceObject {
 export class IotResourceObject extends BaseResourceObject {
   // TODO: add iot specific resource members
 
-  apiResult() {
-    const result = super.apiResult() as IotResource;
+  apiResult(claims: AuthClaims | undefined) {
+    const result = super.apiResult(claims) as IotResource;
     // TODO: add superclass members to return
     return result;
   }
 
-  canCreateKeys(claims: JWTClaims): boolean {
+  canCreateKeys(claims: AuthClaims): boolean {
     // TODO: figure out permissions
     return false;
   }

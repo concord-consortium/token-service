@@ -1,10 +1,11 @@
-import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource} from "../../functions/src/resource-types"
+import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource, ReadWriteTokenAccessRule} from "../../functions/src/resource-types"
+import { getRWTokenFromAccessRules } from "../../functions/src/helpers";
 export * from "../../functions/src/resource-types";
 
 type EnvironmentName = "dev" | "staging" | "production"
 
 export interface TokenServiceClientOptions {
-  jwt: string;
+  jwt?: string;
   env?: EnvironmentName;
   serviceUrl?: string;
 }
@@ -24,7 +25,7 @@ const getEnv = (): EnvironmentName => {
     return "production";
   }
   return "dev";
-}
+};
 
 const getServiceUrlFromEnv = (env: EnvironmentName) => {
   return serviceUrls[env];
@@ -43,10 +44,10 @@ const getServiceUrlFromQueryString = () => {
     }
   }
   return undefined;
-}
+};
 
 export class TokenServiceClient {
-  public readonly jwt: string;
+  public readonly jwt: string | undefined;
   public readonly env: EnvironmentName;
   public readonly serviceUrl: string;
 
@@ -79,7 +80,7 @@ export class TokenServiceClient {
 
   createResource(options: CreateQuery) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("POST", this.url("/"), options)
+      return this.fetch("POST", this.url("/"), { body: options })
         .then(resolve)
         .catch(reject)
     })
@@ -87,7 +88,7 @@ export class TokenServiceClient {
 
   updateResource(resourceId: string, options: UpdateQuery) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("PATCH", this.url(`/${resourceId}`), options)
+      return this.fetch("PATCH", this.url(`/${resourceId}`), { body: options })
         .then(resolve)
         .catch(reject)
     })
@@ -102,27 +103,26 @@ export class TokenServiceClient {
     })
   }
 
-  getCredentials(resourceId: string) {
+  getCredentials(resourceId: string, readWriteToken?: string) {
     return new Promise<Credentials>((resolve, reject) => {
-      return this.fetch("POST", this.url(`/${resourceId}/credentials`))
+      return this.fetch("POST", this.url(`/${resourceId}/credentials`), { readWriteToken })
         .then(resolve)
         .catch(reject)
     })
   }
 
+  getReadWriteToken(resource: S3Resource): string | undefined {
+    return getRWTokenFromAccessRules(resource);
+  }
+
   getPublicS3Path(resource: S3Resource, filename: string = "") {
-    const { id, folder} = resource;
-    return `${folder}/${id}/${filename}`;
+    const { publicPath } = resource;
+    return `${publicPath}${filename}`;
   }
 
   getPublicS3Url(resource: S3Resource, filename: string = "") {
-    const { bucket } = resource;
-    const path = this.getPublicS3Path(resource, filename);
-    if (bucket === "models-resources") {
-      // use cloudfront for models resources
-      return `https://models-resources.concord.org/${path}`;
-    }
-    return `https://${bucket}.s3.amazonaws.com/${path}`;
+    const { publicUrl } = resource;
+    return `${publicUrl}${filename}`;
   }
 
   private url(root: string, query: any = {}) {
@@ -133,20 +133,23 @@ export class TokenServiceClient {
     return `${root}?${keyValues}`;
   }
 
-  private fetch(method: string, path: string, body?: any) {
+  private fetch(method: string, path: string, options?: { body?: any, readWriteToken?: string }) {
     return new Promise<any>((resolve, reject) => {
       const url = `${this.serviceUrl}${path}`;
-      const options: RequestInit = {
+      const requestOptions: RequestInit = {
         method,
         headers: new Headers({
-          "Authorization": `Bearer ${this.jwt}`,
           "Content-Type": "application/json"
         })
       };
-      if (body) {
-        options.body = JSON.stringify(body);
+      const authToken = options?.readWriteToken || this.jwt;
+      if (authToken) {
+        (requestOptions.headers as Headers).set("Authorization", `Bearer ${authToken}`);
       }
-      return fetch(url, options)
+      if (options?.body) {
+        requestOptions.body = JSON.stringify(options.body);
+      }
+      return fetch(url, requestOptions)
         .then((resp) => resp.json())
         .then((json) => {
           if (json.status === "success") {

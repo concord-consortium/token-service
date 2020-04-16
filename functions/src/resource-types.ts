@@ -1,3 +1,5 @@
+export type WithOptional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+
 export interface Config {
   admin: {
     public_key: string;
@@ -10,7 +12,7 @@ export interface Config {
       duration: number;
     }
   }
-};
+}
 
 export type Resource = S3Resource | IotResource;
 
@@ -20,13 +22,15 @@ export interface BaseResource {
   description: string;
   type: ResourceType;
   tool: string;
-  accessRules: AccessRule[]
+  accessRules?: AccessRule[]
 }
 
 export interface S3Resource extends BaseResource {
   bucket: string;
   folder: string;
   region: string;
+  publicPath: string;
+  publicUrl: string;
 }
 
 // tslint:disable-next-line:no-empty-interface
@@ -46,7 +50,7 @@ export type S3ResourceQuery = Omit<Partial<S3Resource>, "id">;
 
 export interface CreateQuery extends ResourceQuery {
   accessRuleType: AccessRuleType;
-  accessRuleRole: AccessRuleRole;
+  accessRuleRole?: AccessRuleRole;
 }
 
 export type UpdateQuery = Omit<Omit<ResourceQuery, 'type'>, 'tool'>;
@@ -61,10 +65,10 @@ export interface Credentials {
 }
 
 export type ResourceType = "s3Folder" | "iotOrganization";
-export type AccessRuleType = "user" | "context";
+export type AccessRuleType = "user" | "context" | "readWriteToken";
 export type AccessRuleRole = "owner" | "member";
 
-export type AccessRule = UserAccessRule | ContextAccessRule;
+export type AccessRule = UserAccessRule | ContextAccessRule | ReadWriteTokenAccessRule;
 
 export interface UserAccessRule {
   type: "user";
@@ -80,4 +84,9 @@ export interface ContextAccessRule {
   contextId: string;
 }
 
+export interface ReadWriteTokenAccessRule {
+  type: "readWriteToken";
+  readWriteToken: string;
+}
 
+export const ReadWriteTokenPrefix = "read-write-token:";

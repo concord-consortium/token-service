@@ -10,6 +10,7 @@ const AppComponent = () => {
   const [firebaseAppName, setFirebaseAppName] = useState(localStorage.getItem("firebaseApp") || "token-service");
   const [portalAccessToken, setPortalAccessToken] = useState("");
   const [firebaseJwt, setFirebaseJwt] = useState("");
+  const [filename, setFilename] = useState("test.txt");
   const [fileContent, setFileContent] = useState("Lorem ipsum");
   const [filePublicUrl, setFilePublicUrl] = useState("");
 
@@ -26,8 +27,12 @@ const AppComponent = () => {
       setFirebaseAppName(event.target.value);
     } else if (prop === "fileContent") {
       setFileContent(event.target.value);
+    } else if (prop === "filename") {
+      setFilename(event.target.value);
     } else if (prop === "tokenServiceEnv") {
       setTokenServiceEnv(event.target.value);
+    } else if (prop === "firebaseJwt") {
+      setFirebaseJwt(event.target.value);
     }
     localStorage.setItem(prop, event.target.value);
   };
@@ -40,8 +45,20 @@ const AppComponent = () => {
     helpers.getFirebaseJwt(portalUrl, portalAccessToken, firebaseAppName).then(token => setFirebaseJwt(token));
   };
 
-  const handleUploadFile = async () => {
-    setFilePublicUrl(await helpers.uploadFileUsingFirebaseJWT(fileContent, firebaseJwt, tokenServiceEnv as "dev" | "staging"));
+  const handleUploadFileUsingJWT = async () => {
+    setFilePublicUrl(await helpers.uploadFileUsingFirebaseJWT(filename, fileContent, firebaseJwt, tokenServiceEnv as "dev" | "staging"));
+  };
+
+  const handleUploadFileAnonymously = async () => {
+    setFilePublicUrl(await helpers.uploadFileAnonymously(filename, fileContent, tokenServiceEnv as "dev" | "staging"));
+  };
+
+  const handleLogAllMyResources = () => {
+    helpers.logAllResources(firebaseJwt, true, tokenServiceEnv as "dev" | "staging");
+  };
+
+  const handleLogAllResources = () => {
+    helpers.logAllResources(firebaseJwt, false, tokenServiceEnv as "dev" | "staging");
   };
 
   return (
@@ -68,15 +85,14 @@ const AppComponent = () => {
           </>
         }
         <p>Portal Access Token: {portalAccessToken && <input value={portalAccessToken} disabled={true}/> || "N/A"}</p>
-        <p>Firebase App Name: <input type="text" value={firebaseAppName}
-                                     onChange={changeText.bind(null, "firebaseAppName")}/></p>
+        <p>Firebase App Name: <input type="text" value={firebaseAppName} onChange={changeText.bind(null, "firebaseAppName")}/></p>
         <p className="hint">
           It has to be configured in Portal → Admin → Firebase Apps
         </p>
         <p>
           <button onClick={handleGetFirebaseJwt}>Get FirebaseJWT</button>
         </p>
-        <p>Firebase JWT: {firebaseJwt && <input value={firebaseJwt} disabled={true}/> || "N/A"}</p>
+        <p>Firebase JWT: {firebaseJwt && <input value={firebaseJwt} onChange={changeText.bind(null, "firebaseJwt")}/> || "N/A"}</p>
       </div>
 
       <div className="section">
@@ -86,13 +102,23 @@ const AppComponent = () => {
           "dev" or "staging". Note that "dev" requires running local server at localhost:5000, see: <a target="_blank" href="https://github.com/concord-consortium/token-service#development-setup">https://github.com/concord-consortium/token-service#development-setup</a><br/>
           If you use "staging", you should see a new entry in this collection each time you upload a file: <a target="_blank" href="https://console.firebase.google.com/project/token-service-staging/database/firestore/data~2Fstaging:resources">https://console.firebase.google.com/project/token-service-staging/database/firestore/data~2Fstaging:resources</a>
         </p>
+        <p>Filename: <input type="text" value={filename} onChange={changeText.bind(null, "filename")}/></p>
         <p><textarea value={fileContent} onChange={changeText.bind(null, "fileContent")}/></p>
         <p>
-          <button onClick={handleUploadFile}>Upload</button>
+          <button onClick={handleUploadFileUsingJWT}>Upload using Firebase JWT (Portal Setup necessary)</button>
+        </p>
+        <p>
+          <button onClick={handleUploadFileAnonymously}>Upload Anonymously (generates readWriteToken)</button>
         </p>
         {
           filePublicUrl && <a target="_blank" href={filePublicUrl}>{filePublicUrl}</a>
         }
+      </div>
+
+      <div className="section">
+        <h3>Misc</h3>
+        <p><button onClick={handleLogAllMyResources}>Log All My Resources</button></p>
+        <p><button onClick={handleLogAllResources}>Log All Resources</button></p>
       </div>
     </div>
   );
