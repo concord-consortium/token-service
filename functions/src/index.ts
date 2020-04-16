@@ -4,7 +4,8 @@ import * as express from 'express';
 import * as bodyParser from 'body-parser';
 import * as cors from 'cors';
 import { BaseResourceObject } from './base-resource-object';
-import { getRWTokenFromAccessRules, makeCachedSettingsGetter } from './helpers';
+import { getRWTokenFromAccessRules } from './common-helpers';
+import { makeCachedSettingsGetter } from './helpers'
 import { Config, ReadWriteTokenPrefix } from './resource-types';
 import { AuthClaims, JWTClaims } from './firestore-types';
 import { verify } from 'jsonwebtoken';
