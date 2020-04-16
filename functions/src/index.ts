@@ -3,8 +3,8 @@ import * as admin from 'firebase-admin';
 import * as express from 'express';
 import * as bodyParser from 'body-parser';
 import * as cors from 'cors';
-import { BaseResourceObject } from './resource';
-import { getRWTokenFromAccessRules } from './helpers';
+import { BaseResourceObject } from './base-resource-object';
+import { getRWTokenFromAccessRules, makeCachedSettingsGetter } from './helpers';
 import { Config, ReadWriteTokenPrefix } from './resource-types';
 import { AuthClaims, JWTClaims } from './firestore-types';
 import { verify } from 'jsonwebtoken';
@@ -178,11 +178,13 @@ app.use(cors());
 app.use(checkEnv);
 
 app.get('/api/v1/resources', (req, res) => {
+  // Use caching here to avoid hitting Firestore db for every resource that is being returned.
+  const getCachedSettings = makeCachedSettingsGetter(db, req.env);
   try {
     // Auth/claims are optional and necessary only if user wants to see more details or his own resources only.
     const claims = optionallyAuthUsingJWT(req);
     BaseResourceObject.FindAll(db, req.env, claims, req.query)
-      .then(resources => resources.map((resource) => resource.apiResult(claims)))
+      .then(resources => resources.map(async resource => resource.apiResult(claims, await getCachedSettings(resource.type, resource.tool))))
       .then(apiResults => res.success(apiResults))
       .catch(error => res.error(400, error))
   } catch (error) {
@@ -195,7 +197,7 @@ app.get('/api/v1/resources/:id', (req, res) => {
   try {
     const claims = optionallyAuthenticate(req);
     BaseResourceObject.Find(db, req.env, req.params.id)
-      .then(resource => res.success(resource.apiResult(claims)))
+      .then(async resource => res.success(resource.apiResult(claims, await BaseResourceObject.GetResourceSettings(db, req.env, resource.type, resource.tool))))
       .catch(error => res.error(404, error))
   } catch (error) {
     // Auth token must have been malformed. In this case return 403 error, don't fallback to anonymous path.
@@ -207,14 +209,14 @@ app.post('/api/v1/resources', (req, res) => {
   try {
     const claims = optionallyAuthUsingJWT(req);
     BaseResourceObject.Create(db, req.env, claims, req.body)
-      .then(resource => {
+      .then(async resource => {
         let authClaims: AuthClaims | undefined = claims;
         if (!authClaims) {
           // Generate auth claims if resource has been created anonymously to return readWriteToken to the owner.
           const readWriteToken = getRWTokenFromAccessRules(resource);
           authClaims = readWriteToken ? { readWriteToken } : undefined;
         }
-        res.success(resource.apiResult(authClaims), 201);
+        res.success(resource.apiResult(authClaims, await BaseResourceObject.GetResourceSettings(db, req.env, resource.type, resource.tool)), 201);
       })
       .catch(error => res.error(400, error));
   } catch (error) {
@@ -227,7 +229,7 @@ app.patch('/api/v1/resources/:id', (req, res) => {
   try {
     const claims = authenticate(req);
     BaseResourceObject.Update(db, req.env, claims, req.params.id, req.body)
-      .then(resource => res.success(resource.apiResult(claims)))
+      .then(async resource => res.success(resource.apiResult(claims, await BaseResourceObject.GetResourceSettings(db, req.env, resource.type, resource.tool))))
       .catch(error => res.error(400, error))
   } catch (error) {
     res.error(403, error);

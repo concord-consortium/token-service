@@ -34,7 +34,7 @@ export class BaseResourceObject implements BaseResource {
     this.accessRules = doc.accessRules;
   }
 
-  apiResult(claims: AuthClaims | undefined): WithOptional<BaseResource, "accessRules"> {
+  apiResult(claims: AuthClaims | undefined, settings?: FireStoreResourceSettings): WithOptional<BaseResource, "accessRules"> {
     // ? is not used for claims, so this argument is NOT optional.
     const { id, name, description, type, tool } = this;
     const result: WithOptional<BaseResource, "accessRules"> = { id, name, description, type, tool };
@@ -363,27 +363,30 @@ export class S3ResourceObject extends BaseResourceObject {
     this.region = doc.region;
   }
 
-  get publicPath() {
+  getPublicPath() {
     const { id, folder} = this;
     return `${folder}/${id}/`;
   }
 
-  get publicUrl() {
+  getPublicUrl(domain: string | undefined) {
     const { bucket } = this;
-    if (bucket === "models-resources") {
-      // use cloudfront for models resources
-      return `https://models-resources.concord.org/${this.publicPath}`;
+    if (domain) {
+      return `${domain}/${this.getPublicPath()}`;
     }
-    return `https://${bucket}.s3.amazonaws.com/${this.publicPath}`;
+    return `https://${bucket}.s3.amazonaws.com/${this.getPublicPath()}`;
   }
 
-  apiResult(claims: AuthClaims | undefined): S3Resource {
+  apiResult(claims: AuthClaims | undefined, settings: FireStoreResourceSettings): S3Resource {
     const result = super.apiResult(claims) as S3Resource;
     result.bucket = this.bucket;
     result.folder = this.folder;
     result.region = this.region;
-    result.publicPath = this.publicPath;
-    result.publicUrl = this.publicUrl;
+    result.publicPath = this.getPublicPath();
+    let domain;
+    if ("domain" in settings) {
+      domain = settings.domain;
+    }
+    result.publicUrl = this.getPublicUrl(domain);
     return result;
   }
 
@@ -405,31 +408,31 @@ export class S3ResourceObject extends BaseResourceObject {
       const policy = JSON.stringify({
         "Version": "2012-10-17",
         "Statement": [
-            {
-              "Sid": "AllowBucketAccess",
-              "Effect": "Allow",
-              "Action": [
-                  "s3:ListBucket",
-                  "s3:ListBucketVersions"
-              ],
-              "Resource": [
-                  `arn:aws:s3:::${bucket}`
-              ]
-            },
-            {
-                "Sid": "AllowAllS3ActionsInResourceFolder",
-                "Action": [
-                  "s3:DeleteObject",
-                  "s3:DeleteObjectVersion",
-                  "s3:GetObject",
-                  "s3:GetObjectVersion",
-                  "s3:PutObject"
-                ],
-                "Effect": "Allow",
-                "Resource": [
-                    `arn:aws:s3:::${bucket}/${keyPrefix}*`
-                ]
-            }
+          {
+            "Sid": "AllowBucketAccess",
+            "Effect": "Allow",
+            "Action": [
+              "s3:ListBucket",
+              "s3:ListBucketVersions"
+            ],
+            "Resource": [
+              `arn:aws:s3:::${bucket}`
+            ]
+          },
+          {
+            "Sid": "AllowAllS3ActionsInResourceFolder",
+            "Action": [
+              "s3:DeleteObject",
+              "s3:DeleteObjectVersion",
+              "s3:GetObject",
+              "s3:GetObjectVersion",
+              "s3:PutObject"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+              `arn:aws:s3:::${bucket}/${keyPrefix}*`
+            ]
+          }
         ]
       });
 

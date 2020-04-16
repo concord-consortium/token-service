@@ -1,6 +1,6 @@
-import { S3ResourceObject, IotResourceObject, BaseResourceObject } from "./resource";
+import { BaseResourceObject, S3ResourceObject, IotResourceObject } from "./base-resource-object";
 import { AccessRule, ReadWriteTokenAccessRule, ReadWriteTokenPrefix } from "./resource-types";
-import { JWTClaims } from "./firestore-types";
+import { FireStoreResourceSettings, JWTClaims } from "./firestore-types";
 import { STS, AWSError } from "aws-sdk";
 
 const expiration = new Date();
@@ -241,23 +241,40 @@ describe("Resource", () => {
   });
 
   describe("S3ResourceObject", () => {
-    it("should return an apiResult", () => {
-      expect(createS3Resource().apiResult(undefined)).toEqual({
-        id: "test",
-        name: "test",
-        description: "test",
-        type: "s3Folder",
-        tool: "glossary",
-        bucket: "test-bucket",
-        folder: "test-folder",
-        region: "test-region",
-        publicPath: "test-folder/test/",
-        publicUrl: "https://test-bucket.s3.amazonaws.com/test-folder/test/"
+    describe("apiResult", () => {
+      it("should return default public path based on bucket when settings don't include domain", () => {
+        expect(createS3Resource().apiResult(undefined, {} as FireStoreResourceSettings)).toEqual({
+          id: "test",
+          name: "test",
+          description: "test",
+          type: "s3Folder",
+          tool: "glossary",
+          bucket: "test-bucket",
+          folder: "test-folder",
+          region: "test-region",
+          publicPath: "test-folder/test/",
+          publicUrl: "https://test-bucket.s3.amazonaws.com/test-folder/test/"
+        });
+      });
+
+      it("should return custom public path based on bucket when settings include domain", () => {
+        expect(createS3Resource().apiResult(undefined, {domain: "https://cloudfront.domain.com"} as FireStoreResourceSettings)).toEqual({
+          id: "test",
+          name: "test",
+          description: "test",
+          type: "s3Folder",
+          tool: "glossary",
+          bucket: "test-bucket",
+          folder: "test-folder",
+          region: "test-region",
+          publicPath: "test-folder/test/",
+          publicUrl: "https://cloudfront.domain.com/test-folder/test/"
+        });
       });
     });
 
     it("should be capable of creating vortex configurations", () => {
-      expect(createS3VortexConfig().apiResult(undefined)).toEqual({
+      expect(createS3VortexConfig().apiResult(undefined, {} as FireStoreResourceSettings)).toEqual({
         bucket: "test-vortex-bucket",
         description: "test",
         folder: "test-vortex-folder",
