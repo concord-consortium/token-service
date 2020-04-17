@@ -15,7 +15,7 @@ install:
   - cd client && travis_retry npm ci && cd ..
   - cd example-app && travis_retry npm ci && cd ..
 script:
-  - cd functions && npm run build && npm run test && cd ..
+  - cd functions && npm run build && npm run test:with-emulator && cd ..
   - cd client && npm run build && cd ..
   - cd example-app && npm run build && cd ..
   - mkdir -p dist/example-app && cp -R example-app/dist/. dist/example-app

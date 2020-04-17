@@ -27,7 +27,7 @@ admin.initializeApp(functions.config().firebase);
 admin.firestore().settings({
   timestampsInSnapshots: true   // this removes a deprecation warning
 });
-const db = admin.firestore();
+export const db = admin.firestore();
 
 const app = express();
 
@@ -177,6 +177,16 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cors());
 app.use(checkEnv);
+
+app.get('/api/v1/test', (req, res) => {
+  res.success("test OK");
+});
+
+app.post('/api/v1/test', (req, res) => {
+  db.collection("test").doc("test-doc").set(req.body)
+    .then(writeResult => res.success("test write OK"))
+    .catch(error => res.error(400, error));
+});
 
 app.get('/api/v1/resources', (req, res) => {
   // Use caching here to avoid hitting Firestore db for every resource that is being returned.
