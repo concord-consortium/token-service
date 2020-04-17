@@ -9,7 +9,7 @@
     "firestore-emulator": "firebase emulators:start --only firestore",
     "test": "FIRESTORE_EMULATOR_HOST=localhost:8999 jest --detectOpenHandles",
     "test:with-emulator": "firebase emulators:exec --only firestore \"npm run test\"",
-    "test:watch": "FIRESTORE_EMULATOR_HOST=localhost:8999 jest --watch",
+    "test:watch": "FIRESTORE_EMULATOR_HOST=localhost:8999 jest --watch --detectOpenHandles",
     "deploy": "firebase use --clear && firebase deploy",
     "deploy:staging": "firebase deploy --project staging",
     "logs": "firebase functions:log"
