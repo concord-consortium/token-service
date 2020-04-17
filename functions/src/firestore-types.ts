@@ -1,14 +1,19 @@
-import { S3Resource, IotResource, AccessRuleType, ResourceType } from "./resource-types";
+import { AccessRuleType, ResourceType, AccessRule } from "./resource-types";
 
 export type FireStoreResource = FireStoreS3Resource | FireStoreIotOrganizationResource;
 
-// S3Resource is client-facing interface. Some of the fields are marked as optional (e.g. accessRules) as user
-// might not have access to them. Firestore version represents data stored in Firestore, so getters/derived values
-// are omitted and all the fields are marked as present/required.
-export interface FireStoreS3Resource extends Required<Omit<S3Resource, "id" | "publicPath" | "publicUrl">> {
+export interface FirestoreBaseResource {
+  name: string;
+  description: string;
+  type: ResourceType;
+  tool: string;
+  accessRules: AccessRule[]
+}
+
+export interface FireStoreS3Resource extends FirestoreBaseResource {
   type: "s3Folder"
 }
-export interface FireStoreIotOrganizationResource extends Required<Omit<IotResource, "id">> {
+export interface FireStoreIotOrganizationResource extends FirestoreBaseResource {
   type: "iotOrganization"
 }
 
