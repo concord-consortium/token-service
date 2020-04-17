@@ -1,6 +1,6 @@
 import { BaseResourceObject, S3ResourceObject, IotResourceObject } from "./base-resource-object";
 import { AccessRule, ReadWriteTokenAccessRule, ReadWriteTokenPrefix } from "./resource-types";
-import { FireStoreResourceSettings, JWTClaims } from "./firestore-types";
+import { FireStoreResourceSettings, FireStoreS3ResourceSettings, JWTClaims } from "./firestore-types";
 import { STS, AWSError } from "aws-sdk";
 
 const expiration = new Date();
@@ -105,10 +105,7 @@ const createBaseResource = (accessRules: AccessRule[] = []) => {
     description: "test",
     type: "s3Folder",
     tool: "glossary",
-    accessRules,
-    bucket: "test-bucket",
-    folder: "test-folder",
-    region: "test-region"
+    accessRules
   });
 };
 
@@ -118,10 +115,7 @@ const createS3Resource = (accessRules: AccessRule[] = []) => {
     description: "test",
     type: "s3Folder",
     tool: "glossary",
-    accessRules,
-    bucket: "test-bucket",
-    folder: "test-folder",
-    region: "test-region"
+    accessRules
   });
 };
 
@@ -131,10 +125,7 @@ const createS3VortexConfig = (accessRules: AccessRule[] = []) => {
     description: "test",
     type: "s3Folder",
     tool: "vortex",
-    accessRules,
-    bucket: "test-vortex-bucket",
-    folder: "test-vortex-folder",
-    region: "test-vortex-region"
+    accessRules
   });
 };
 
@@ -177,7 +168,7 @@ describe("Resource", () => {
     });
 
     it("should not create keys", async () => {
-      await expect(createBaseResource().createKeys(config)).rejects.toEqual("Implement createKeys in subclass");
+      await expect(createBaseResource().createKeys(config, {} as FireStoreResourceSettings)).rejects.toEqual("Implement createKeys in subclass");
     });
 
     describe("#hasUserRole", () => {
@@ -243,7 +234,10 @@ describe("Resource", () => {
   describe("S3ResourceObject", () => {
     describe("apiResult", () => {
       it("should return default public path based on bucket when settings don't include domain", () => {
-        expect(createS3Resource().apiResult(undefined, {} as FireStoreResourceSettings)).toEqual({
+        expect(createS3Resource().apiResult(
+          undefined,
+          {bucket: "test-bucket", folder: "test-folder", region: "test-region"} as FireStoreResourceSettings)
+        ).toEqual({
           id: "test",
           name: "test",
           description: "test",
@@ -258,7 +252,10 @@ describe("Resource", () => {
       });
 
       it("should return custom public path based on bucket when settings include domain", () => {
-        expect(createS3Resource().apiResult(undefined, {domain: "https://cloudfront.domain.com"} as FireStoreResourceSettings)).toEqual({
+        expect(createS3Resource().apiResult(
+          undefined,
+          {bucket: "test-bucket", folder: "test-folder", region: "test-region", domain: "https://cloudfront.domain.com"} as FireStoreResourceSettings)
+        ).toEqual({
           id: "test",
           name: "test",
           description: "test",
@@ -274,7 +271,10 @@ describe("Resource", () => {
     });
 
     it("should be capable of creating vortex configurations", () => {
-      expect(createS3VortexConfig().apiResult(undefined, {} as FireStoreResourceSettings)).toEqual({
+      expect(createS3VortexConfig().apiResult(
+        undefined,
+        {bucket: "test-vortex-bucket", folder: "test-vortex-folder", region: "test-vortex-region",} as FireStoreResourceSettings)
+      ).toEqual({
         bucket: "test-vortex-bucket",
         description: "test",
         folder: "test-vortex-folder",
@@ -303,7 +303,7 @@ describe("Resource", () => {
     });
 
     it("should create keys", async () => {
-      const keys = await createS3Resource().createKeys(config);
+      const keys = await createS3Resource().createKeys(config, {bucket: "test-bucket", folder: "test-folder", region: "test-region"} as FireStoreS3ResourceSettings);
       expect(STS.prototype.assumeRole).toBeCalledTimes(1);
       expect(keys).toEqual({
         accessKeyId: "test-key-id",

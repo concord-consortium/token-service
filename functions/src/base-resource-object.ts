@@ -1,4 +1,4 @@
-import { JWTClaims, FireStoreResource, FireStoreS3Resource, FireStoreResourceSettings, AuthClaims } from "./firestore-types";
+import { JWTClaims, FireStoreResource, FireStoreResourceSettings, FireStoreS3ResourceSettings, AuthClaims } from "./firestore-types";
 import {
   ResourceType, AccessRule, AccessRuleRole, ContextAccessRule, UserAccessRule,
   FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
@@ -80,7 +80,7 @@ export class BaseResourceObject implements BaseResource {
     return false;
   }
 
-  createKeys(config: Config) {
+  createKeys(config: Config, settings: FireStoreResourceSettings) {
     // need to override in subclasses
     return new Promise<Credentials>((resolve, reject) => {
       reject(`Implement createKeys in subclass`);
@@ -234,18 +234,14 @@ export class BaseResourceObject implements BaseResource {
             accessRules = [{type: "readWriteToken", readWriteToken}] as ReadWriteTokenAccessRule[];
           }
           let newResource: FireStoreResource;
-          switch (settings.type) {
+          switch (type) {
             case "s3Folder":
-              const {bucket, folder, region} = settings;
               newResource = {
                 type: "s3Folder",
                 tool,
                 name,
                 description,
                 accessRules,
-                bucket,
-                folder,
-                region
               };
               break;
 
@@ -335,11 +331,15 @@ export class BaseResourceObject implements BaseResource {
   static CreateAWSKeys(db: FirebaseFirestore.Firestore, env: string, claims: AuthClaims, id: string, config: Config) {
     return new Promise<Credentials>((resolve, reject) => {
       return BaseResourceObject.Find(db, env, id)
-        .then((resource) => {
+        .then(resource => {
           if (resource.canCreateKeys(claims)) {
-            return resource.createKeys(config)
-              .then(resolve)
-              .catch(reject)
+            return BaseResourceObject.GetResourceSettings(db, env, resource.type, resource.tool)
+              .then(settings =>
+                resource.createKeys(config, settings)
+                  .then(resolve)
+                  .catch(reject)
+              )
+              .catch(reject);
           }
           else {
             reject(`You do not have permission to create AWS keys for resource ${id}!`);
@@ -352,41 +352,29 @@ export class BaseResourceObject implements BaseResource {
 }
 
 export class S3ResourceObject extends BaseResourceObject {
-  bucket: string;
-  folder: string;
-  region: string;
-
-  constructor (id: string, doc: FireStoreS3Resource) {
-    super(id, doc);
-    this.bucket = doc.bucket;
-    this.folder = doc.folder;
-    this.region = doc.region;
+  getPublicPath(settings: FireStoreS3ResourceSettings) {
+    const { id } = this;
+    return `${settings.folder}/${id}/`;
   }
 
-  getPublicPath() {
-    const { id, folder} = this;
-    return `${folder}/${id}/`;
-  }
-
-  getPublicUrl(domain: string | undefined) {
-    const { bucket } = this;
-    if (domain) {
-      return `${domain}/${this.getPublicPath()}`;
+  getPublicUrl(settings: FireStoreS3ResourceSettings) {
+    if (settings.domain) {
+      return `${settings.domain}/${this.getPublicPath(settings)}`;
     }
-    return `https://${bucket}.s3.amazonaws.com/${this.getPublicPath()}`;
+    return `https://${settings.bucket}.s3.amazonaws.com/${this.getPublicPath(settings)}`;
   }
 
   apiResult(claims: AuthClaims | undefined, settings: FireStoreResourceSettings): S3Resource {
+    // Cast settings to desired type. We can't change argument type due to the way how the logic and typing is
+    // organized in resource classes. TODO: refactor all that, base class is referencing its subclasses often,
+    // causing circular dependencies and issues like this one.
+    const s3settings = settings as FireStoreS3ResourceSettings;
     const result = super.apiResult(claims) as S3Resource;
-    result.bucket = this.bucket;
-    result.folder = this.folder;
-    result.region = this.region;
-    result.publicPath = this.getPublicPath();
-    let domain;
-    if ("domain" in settings) {
-      domain = settings.domain;
-    }
-    result.publicUrl = this.getPublicUrl(domain);
+    result.bucket = s3settings.bucket;
+    result.folder = s3settings.folder;
+    result.region = s3settings.region;
+    result.publicPath = this.getPublicPath(s3settings);
+    result.publicUrl = this.getPublicUrl(s3settings);
     return result;
   }
 
@@ -400,10 +388,14 @@ export class S3ResourceObject extends BaseResourceObject {
     }
   }
 
-  createKeys(config: Config) {
+  createKeys(config: Config, settings: FireStoreResourceSettings) {
+    // Cast settings to desired type. We can't change argument type due to the way how the logic and typing is
+    // organized in resource classes. TODO: refactor all that, base class is referencing its subclasses often,
+    // causing circular dependencies and issues like this one.
+    const s3settings = settings as FireStoreS3ResourceSettings;
     return new Promise<Credentials>((resolve, reject) => {
-      const { bucket, folder, id } = this;
-      const keyPrefix = `${folder}/${id}/`
+      const { id } = this;
+      const keyPrefix = `${s3settings.folder}/${id}/`
 
       const policy = JSON.stringify({
         "Version": "2012-10-17",
@@ -416,7 +408,7 @@ export class S3ResourceObject extends BaseResourceObject {
               "s3:ListBucketVersions"
             ],
             "Resource": [
-              `arn:aws:s3:::${bucket}`
+              `arn:aws:s3:::${s3settings.bucket}`
             ]
           },
           {
@@ -430,7 +422,7 @@ export class S3ResourceObject extends BaseResourceObject {
             ],
             "Effect": "Allow",
             "Resource": [
-              `arn:aws:s3:::${bucket}/${keyPrefix}*`
+              `arn:aws:s3:::${s3settings.bucket}/${keyPrefix}*`
             ]
           }
         ]
@@ -438,8 +430,8 @@ export class S3ResourceObject extends BaseResourceObject {
 
       // call assume role
       const sts = new STS({
-        region: this.region,
-        endpoint: `https://sts.${this.region}.amazonaws.com`,
+        region: s3settings.region,
+        endpoint: `https://sts.${s3settings.region}.amazonaws.com`,
         accessKeyId: config.aws.key,
         secretAccessKey: config.aws.secret
       });
@@ -464,7 +456,7 @@ export class S3ResourceObject extends BaseResourceObject {
             expiration: Expiration,
             secretAccessKey: SecretAccessKey,
             sessionToken: SessionToken,
-            bucket,
+            bucket: s3settings.bucket,
             keyPrefix
           });
         }

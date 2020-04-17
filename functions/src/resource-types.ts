@@ -1,3 +1,5 @@
+import { FirestoreBaseResource } from "./firestore-types";
+
 export type WithOptional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 
 export interface Config {
@@ -16,12 +18,10 @@ export interface Config {
 
 export type Resource = S3Resource | IotResource;
 
-export interface BaseResource {
+// Client-facing interfaces. Extend data stored in FireStore with helper values that can be calculated dynamically.
+export interface BaseResource extends Omit<FirestoreBaseResource, "accessRules"> {
   id: string;
-  name: string;
-  description: string;
-  type: ResourceType;
-  tool: string;
+  // Optional, as client will see it only if it's authorized.
   accessRules?: AccessRule[]
 }
 
