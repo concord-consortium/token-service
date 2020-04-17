@@ -1,5 +1,5 @@
-import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource, ReadWriteTokenAccessRule} from "../../functions/src/resource-types"
-import { getRWTokenFromAccessRules } from "../../functions/src/helpers";
+import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resource } from "../../functions/src/resource-types"
+import { getRWTokenFromAccessRules } from "../../functions/src/common-helpers";
 export * from "../../functions/src/resource-types";
 
 type EnvironmentName = "dev" | "staging" | "production"
