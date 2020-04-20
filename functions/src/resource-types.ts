@@ -45,15 +45,14 @@ export interface FindAllQuery {
 }
 
 // mark all resource fields as optional so we get type checking
-export type ResourceQuery = Omit<Partial<Resource>, "id">;
-export type S3ResourceQuery = Omit<Partial<S3Resource>, "id">;
+export type ResourceQuery = Omit<Resource, "id">;
 
 export interface CreateQuery extends ResourceQuery {
   accessRuleType: AccessRuleType;
   accessRuleRole?: AccessRuleRole;
 }
 
-export type UpdateQuery = Omit<Omit<ResourceQuery, 'type'>, 'tool'>;
+export type UpdateQuery = Partial<Omit<ResourceQuery, 'type' | 'tool'>>;
 
 export interface Credentials {
   accessKeyId: string;

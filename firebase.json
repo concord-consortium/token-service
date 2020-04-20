@@ -23,5 +23,10 @@
         "function": "webApiV1"
       }
     ]
+  },
+  "emulators": {
+    "firestore": {
+      "port": "8999"
+    }
   }
 }

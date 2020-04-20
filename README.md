@@ -143,3 +143,11 @@ To start local server with example app:
 1. `cd functions` (all the commands below should be executed in `functions/` dir)
 2. Run `npm i` to load all the dependencies
 3. Run `npm start` to start all servers
+
+### Testing
+
+1. `cd functions` (all the commands below should be executed in `functions/` dir)
+2. `npm run test:with-emulator` starts Firestore emulator and run all the tests
+3. Alternatively, you can start emulator first using: `npm run firestore-emulator` and then use 
+   `npm test` or `npm run test:watch`. This is better for development, as emulator doesn't have to start 
+   and shutdown each time. 
