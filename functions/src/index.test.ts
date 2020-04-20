@@ -1,14 +1,15 @@
 // @firebase/testing module is used to interact with the emulator that runs locally.
 // It's mostly described in the context of Firestore rules testing: https://firebase.google.com/docs/rules/unit-tests
 import * as firebaseTesting from "@firebase/testing";
-import * as functions from "firebase-functions-test";
+import * as firebaseFunctionsTest from "firebase-functions-test";
 // This is necessary automatically setup config for test environment.
 // If you want to connect to real Firestore, configuration can be provided here.
 // Otherwise, emulator is needed. Emulator is set using env variable: FIRESTORE_EMULATOR_HOST
 // (check package.json scripts).
 const projectId = "test-project";
-const firebaseFunctionsEnv = functions({ projectId });
-// Require functions AFTER calling functions.
+const firebaseFunctionsEnv = firebaseFunctionsTest({ projectId });
+// Require ./index AFTER calling firebaseFunctionsTest.
+// firebaseFunctionsTest mocks firebase.config() that is used in the ./index module.
 import { webApiV1, db } from "./index";
 
 import * as supertest from "supertest";
