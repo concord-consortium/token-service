@@ -49,7 +49,6 @@ export type ResourceQuery = Omit<Resource, "id">;
 
 export interface CreateQuery extends ResourceQuery {
   accessRuleType: AccessRuleType;
-  accessRuleRole?: AccessRuleRole;
 }
 
 export type UpdateQuery = Partial<Omit<ResourceQuery, 'type' | 'tool'>>;
@@ -64,23 +63,16 @@ export interface Credentials {
 }
 
 export type ResourceType = "s3Folder" | "iotOrganization";
-export type AccessRuleType = "user" | "context" | "readWriteToken";
+export type AccessRuleType = "user" | "readWriteToken";
 export type AccessRuleRole = "owner" | "member";
 
-export type AccessRule = UserAccessRule | ContextAccessRule | ReadWriteTokenAccessRule;
+export type AccessRule = UserAccessRule | ReadWriteTokenAccessRule;
 
 export interface UserAccessRule {
   type: "user";
   role: AccessRuleRole;
   platformId: string;
   userId: string;
-}
-
-export interface ContextAccessRule {
-  type: "context";
-  role: AccessRuleRole;
-  platformId: string;
-  contextId: string;
 }
 
 export interface ReadWriteTokenAccessRule {
