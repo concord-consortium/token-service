@@ -41,42 +41,23 @@ const checkResponse = (response: any) => {
   return json;
 }
 
-const checkResource = (
-  { test, expected, settings, auth }:
-  { test: S3ResourceObject, expected: FireStoreS3Resource & {id: string} | CreateQuery & {id: string}, settings: FireStoreS3ResourceSettings, auth: boolean }
-) => {
-  expect(test).toEqual({
-    id: expected.id,
-    name: expected.name,
-    description: expected.description,
-    publicPath: `test-folder/${expected.id}/`,
-    publicUrl: `https://test-bucket.s3.amazonaws.com/test-folder/${expected.id}/`,
-    bucket: settings.bucket,
-    folder: settings.folder,
-    region: settings.region,
-    tool: settings.tool,
-    type: settings.type,
-    // accessRules is defined only if request comes from authenticated and authorized user.
-    accessRules: auth ? expected.accessRules : undefined
-  });
-};
-
-const checkResources = (
-  { test, expected, settings, auth }:
-  { test: S3ResourceObject[], expected: Array<FireStoreS3Resource & {id: string}>, settings: FireStoreS3ResourceSettings, auth: boolean }
-) => {
-  expect(test.length).toEqual(expected.length);
-  const testCopy = test.slice();
-  // Note that order of resources is not defined in response and usually it's random. That's why this function
-  // seems more complicated than it could be.
-  expected.forEach(refDoc => {
-    const testDocIdx = testCopy.findIndex(doc => doc.id === refDoc.id);
-    const testDoc = testCopy[testDocIdx];
-    expect(testDoc).not.toBeUndefined();
-    checkResource({ test: testDoc!, expected: refDoc, settings, auth });
-    testCopy.splice(testDocIdx, 1);
-  });
-};
+const expectedResourceObject = (
+  { resource, settings, includeAccessRules }:
+  { resource: FireStoreS3Resource & {id: string} | CreateQuery & {id: string}, settings: FireStoreS3ResourceSettings, includeAccessRules: boolean }
+) => ({
+  id: resource.id,
+  name: resource.name,
+  description: resource.description,
+  publicPath: `test-folder/${resource.id}/`,
+  publicUrl: `https://test-bucket.s3.amazonaws.com/test-folder/${resource.id}/`,
+  bucket: settings.bucket,
+  folder: settings.folder,
+  region: settings.region,
+  tool: settings.tool,
+  type: settings.type,
+  // accessRules is defined only if request comes from authenticated and authorized user.
+  accessRules: includeAccessRules ? resource.accessRules : undefined
+});
 
 const getResourcesCount = async () => (await db.collection("dev:resources").get()).size;
 
@@ -205,7 +186,7 @@ describe("token-service app", () => {
         .expect(200);
 
       const json = checkResponse(response);
-      checkResource({ test: json.result, expected: resource, settings, auth: false });
+      expect(json.result).toEqual(expectedResourceObject({ resource, settings, includeAccessRules: false }));
     });
 
     it("returns resource with sensitive data when user is authenticated (readWriteToken)", async () => {
@@ -218,7 +199,7 @@ describe("token-service app", () => {
         .expect(200);
 
       const json = checkResponse(response);
-      checkResource({ test: json.result, expected: resource, settings, auth: true });
+      expect(json.result).toEqual(expectedResourceObject({ resource, settings, includeAccessRules: true }));
     });
 
     it("returns resource with sensitive data when user is authenticated (JWT)", async () => {
@@ -231,7 +212,7 @@ describe("token-service app", () => {
         .expect(200);
 
       const json = checkResponse(response);
-      checkResource({ test: json.result, expected: resource, settings, auth: true });
+      expect(json.result).toEqual(expectedResourceObject({ resource, settings, includeAccessRules: true }));
     });
   });
 
@@ -245,7 +226,17 @@ describe("token-service app", () => {
         .expect(200);
 
       const json = checkResponse(response);
-      checkResources({ test: json.result , expected: resources, settings, auth: false });
+      const result = json.result;
+      expect(result.length).toEqual(resources.length);
+      // Note that order of resources is not defined in response and usually it's random. That's why this function
+      // seems more complicated than it could be.
+      resources.forEach(refDoc => {
+        const testDocIdx = result.findIndex((doc: any) => doc.id === refDoc.id);
+        const testDoc = result[testDocIdx];
+        expect(testDoc).not.toBeUndefined();
+        expect(testDoc).toEqual(expectedResourceObject({ resource: refDoc!, settings, includeAccessRules: false }))
+        result.splice(testDocIdx, 1);
+      });
     });
 
     it("returns all resources with sensitive data when user is authenticated and has access to given resource (JWT)", async () => {
@@ -262,8 +253,8 @@ describe("token-service app", () => {
       // Note that order of resources is not defined in response and usually it's random.
       const res1Resp = json.result.find((d: S3ResourceObject) => d.id === resource1.id);
       const res2Resp = json.result.find((d: S3ResourceObject) => d.id === resource2.id);
-      checkResource({ test: res1Resp, expected: resource1, settings, auth: true });
-      checkResource({ test: res2Resp, expected: resource2, settings, auth: false });
+      expect(res1Resp).toEqual(expectedResourceObject({ resource: resource1, settings, includeAccessRules: true }));
+      expect(res2Resp).toEqual(expectedResourceObject({ resource: resource2, settings, includeAccessRules: false }));
     });
 
     it("returns user's own resources with when amOwner param is provided", async () => {
@@ -279,7 +270,7 @@ describe("token-service app", () => {
 
       const json = checkResponse(response);
       expect(json.result.length).toEqual(1);
-      checkResource({ test: json.result[0], expected: resource1, settings, auth: true });
+      expect(json.result[0]).toEqual(expectedResourceObject({ resource: resource1, settings, includeAccessRules: true }));
     });
   });
 
