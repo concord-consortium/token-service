@@ -7,7 +7,8 @@ import * as jwt from "jsonwebtoken";
 import * as supertest from "supertest";
 import { FireStoreS3Resource, FireStoreS3ResourceSettings } from "./firestore-types";
 import { CreateQuery, ReadWriteTokenPrefix, UpdateQuery, UserAccessRule } from "./resource-types";
-
+import { S3ResourceObject } from "./base-resource-object";
+import { fakeAwsCredentials } from "./__mocks__/aws-sdk";
 // This is necessary automatically setup config for test environment.
 // If you want to connect to real Firestore, configuration can be provided here.
 // Otherwise, emulator is needed. Emulator is set using env variable: FIRESTORE_EMULATOR_HOST
@@ -33,7 +34,6 @@ firebaseFunctionsEnv.mockConfig({
 // Require ./index AFTER calling firebaseFunctionsTest and mocking config.
 // firebase.config() is used in the ./index module, so it needs to be mocked first.
 import { webApiV1, db } from "./index";
-import { S3ResourceObject } from "./base-resource-object";
 
 const checkResponse = (response: any) => {
   const json = JSON.parse(response.text);
@@ -377,6 +377,19 @@ describe("token-service app", () => {
   });
 
   describe("PATCH api/v1/resources/:id", () => {
+    it("fails if user is not authenticated", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const updateQuery: UpdateQuery = { description: "new description" };
+      const response = await supertest(webApiV1)
+        .patch("/api/v1/resources/" + resource.id)
+        .send(updateQuery)
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("Missing token in headers, query or cookie");
+      expect(await getFirstResource()).not.toEqual(expect.objectContaining(updateQuery));
+    });
+
     it("fails if user is trying to use readWriteToken (so user can't revoke access to the shared document for other rwtoken owners)", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
@@ -428,6 +441,128 @@ describe("token-service app", () => {
       const json = checkResponse(response);
       expect(json.result).toEqual(expect.objectContaining(updateQuery));
       expect(await getFirstResource()).toEqual(expect.objectContaining(updateQuery));
+    });
+  });
+
+  describe("POST api/v1/resources/:id/credentials", () => {
+    it("fails if user is not authenticated", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("Missing token in headers, query or cookie");
+    });
+
+    it("returns credentials when user is an owner (JWT)", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(200);
+      const json = checkResponse(response);
+      expect(json.result).toEqual({
+        bucket: "test-bucket",
+        keyPrefix: `test-folder/${resource.id}/`,
+        accessKeyId: fakeAwsCredentials.AccessKeyId,
+        secretAccessKey: fakeAwsCredentials.SecretAccessKey,
+        sessionToken: fakeAwsCredentials.SessionToken,
+        expiration: fakeAwsCredentials.Expiration
+      });
+    });
+
+    it("returns credentials when user is a member (JWT)", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource({
+        accessRules: [{ type: "user", role: "member", userId: user.userId, platformId: user.platformId } as UserAccessRule]
+      });
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(200);
+      const json = checkResponse(response);
+      expect(json.result).toEqual({
+        bucket: "test-bucket",
+        keyPrefix: `test-folder/${resource.id}/`,
+        accessKeyId: fakeAwsCredentials.AccessKeyId,
+        secretAccessKey: fakeAwsCredentials.SecretAccessKey,
+        sessionToken: fakeAwsCredentials.SessionToken,
+        expiration: fakeAwsCredentials.Expiration
+      });
+    });
+
+    it("returns credentials when user has readWriteToken", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${readWriteToken}`)
+        .query({ env: "dev" })
+        .expect(200);
+      const json = checkResponse(response);
+      expect(json.result).toEqual({
+        bucket: "test-bucket",
+        keyPrefix: `test-folder/${resource.id}/`,
+        accessKeyId: fakeAwsCredentials.AccessKeyId,
+        secretAccessKey: fakeAwsCredentials.SecretAccessKey,
+        sessionToken: fakeAwsCredentials.SessionToken,
+        expiration: fakeAwsCredentials.Expiration
+      });
+    });
+  });
+
+  describe("DELETE api/v1/resources/:id", () => {
+    it("fails if user is not authenticated", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(webApiV1)
+        .delete("/api/v1/resources/" + resource.id)
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("Missing token in headers, query or cookie");
+      expect(await getResourcesCount()).toEqual(1);
+    });
+
+    it("fails if user is trying to use readWriteToken (so user can't delete the shared document)", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(webApiV1)
+        .delete("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${readWriteToken}`)
+        .query({ env: "dev" })
+        .expect(400);
+      expect(response.text).toContain("You do not have permission to delete resource");
+      expect(await getResourcesCount()).toEqual(1);
+    });
+
+    it("fails if user is only a member", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource({
+        accessRules: [{ type: "user", role: "member", userId: user.userId, platformId: user.platformId } as UserAccessRule]
+      });
+      const response = await supertest(webApiV1)
+        .delete("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(400);
+      expect(response.text).toContain("You do not have permission to delete resource");
+      expect(await getResourcesCount()).toEqual(1);
+    });
+
+    it("deletes resource if user is an owner", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(webApiV1)
+        .delete("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(200);
+      checkResponse(response);
+      expect(await getResourcesCount()).toEqual(0);
     });
   });
 });
