@@ -1,9 +1,8 @@
 import { BaseResourceObject, S3ResourceObject, IotResourceObject } from "./base-resource-object";
 import { AccessRule, ReadWriteTokenAccessRule, ReadWriteTokenPrefix } from "./resource-types";
 import { FireStoreResourceSettings, FireStoreS3ResourceSettings, JWTClaims } from "./firestore-types";
-import { STS, AWSError } from "aws-sdk";
+import { fakeAwsCredentials } from "./__mocks__/aws-sdk";
 
-const expiration = new Date();
 const config = {
   admin: {
     public_key: "test-public-key"
@@ -85,19 +84,6 @@ const validClaims: JWTClaims = {
   platform_user_id: "1",
   user_id: "test-user-id"
 };
-
-STS.prototype.assumeRole = jest.fn((params, callback?) => {
-  if (callback) {
-    callback(null as unknown as AWSError, {
-      Credentials: {
-        AccessKeyId: "test-key-id",
-        Expiration: expiration,
-        SecretAccessKey: "test-secret-access-key",
-        SessionToken: "test-session-token",
-      }
-    })
-  }
-}) as any;
 
 const createBaseResource = (accessRules: AccessRule[] = []) => {
   return new BaseResourceObject("test", {
@@ -304,14 +290,13 @@ describe("Resource", () => {
 
     it("should create keys", async () => {
       const keys = await createS3Resource().createKeys(config, {bucket: "test-bucket", folder: "test-folder", region: "test-region"} as FireStoreS3ResourceSettings);
-      expect(STS.prototype.assumeRole).toBeCalledTimes(1);
       expect(keys).toEqual({
-        accessKeyId: "test-key-id",
+        accessKeyId: fakeAwsCredentials.AccessKeyId,
         bucket: "test-bucket",
-        expiration,
+        expiration: fakeAwsCredentials.Expiration,
         keyPrefix: "test-folder/test/",
-        secretAccessKey: "test-secret-access-key",
-        sessionToken: "test-session-token"
+        secretAccessKey: fakeAwsCredentials.SecretAccessKey,
+        sessionToken: fakeAwsCredentials.SessionToken
       });
     });
   });
