@@ -47,7 +47,6 @@ export const uploadFileUsingFirebaseJWT = async (filename: string, fileContent: 
     type: "s3Folder",
     name: filename,
     description: "test file",
-    accessRuleRole: "owner",
     accessRuleType: "user"
   }) as S3Resource;
   console.log("new resource:", resource);

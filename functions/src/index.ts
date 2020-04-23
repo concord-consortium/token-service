@@ -115,8 +115,8 @@ const getClaimsFromJWT = (token: string): JWTClaims => {
   }
   else {
     const config = getValidatedConfig();
-    const public_key = config.admin.public_key.split("\\n").join("\n");
-    const decoded: any = verify(token, public_key, { algorithms: ["RS256"] });
+    const publicKey = config.admin.public_key.split("\\n").join("\n");
+    const decoded: any = verify(token, publicKey, { algorithms: ["RS256"] });
     if (typeof decoded !== "object" || decoded.claims === undefined) {
       throw new Error("Invalid token!");
     }
@@ -184,7 +184,7 @@ app.get('/api/v1/test', (req, res) => {
 
 app.post('/api/v1/test', (req, res) => {
   db.collection("test").doc("test-doc").set(req.body)
-    .then(writeResult => res.success("test write OK"))
+    .then(() => res.success("test write OK"))
     .catch(error => res.error(400, error));
 });
 
@@ -195,9 +195,9 @@ app.get('/api/v1/resources', (req, res) => {
     // Auth/claims are optional and necessary only if user wants to see more details or his own resources only.
     const claims = optionallyAuthUsingJWT(req);
     BaseResourceObject.FindAll(db, req.env, claims, req.query)
-      .then(resources => resources.map(async resource => resource.apiResult(claims, await getCachedSettings(resource.type, resource.tool))))
+      .then(resources => Promise.all(resources.map(async resource => resource.apiResult(claims, await getCachedSettings(resource.type, resource.tool)))))
       .then(apiResults => res.success(apiResults))
-      .catch(error => res.error(400, error))
+      .catch(error => res.error(400, error));
   } catch (error) {
     // Auth token must have been malformed. In this case return 403 error, don't fallback to anonymous path.
     res.error(403, error);
