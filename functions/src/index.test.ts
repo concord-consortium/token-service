@@ -234,7 +234,7 @@ describe("token-service app", () => {
         const testDocIdx = result.findIndex((doc: any) => doc.id === refDoc.id);
         const testDoc = result[testDocIdx];
         expect(testDoc).not.toBeUndefined();
-        expect(testDoc).toEqual(expectedResourceObject({ resource: refDoc!, settings, includeAccessRules: false }))
+        expect(testDoc).toEqual(expectedResourceObject({ resource: refDoc, settings, includeAccessRules: false }));
         result.splice(testDocIdx, 1);
       });
     });
