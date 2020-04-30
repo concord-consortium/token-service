@@ -16,6 +16,8 @@
       }
       #app {
         padding: 10px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
       }
       button {
         font-size: 17px;
@@ -29,12 +31,16 @@
       }
       textarea {
         width: 600px;
-        height: 80px;
+        height: 40px;
       }
       .section {
         border: 1px solid gray;
         padding: 10px;
         margin: 5px;
+      }
+      .disabled {
+        pointer-events: none;
+        opacity: 0.5;
       }
       .hint {
         font-size: 0.85em;
