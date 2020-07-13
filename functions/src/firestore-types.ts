@@ -32,6 +32,11 @@ export interface FireStoreS3ResourceSettings extends ResourceSettings {
   region: string;
   // Optional domain, usually pointing to cloudfront distribution. It affects publicUrl of the resource.
   domain?: string;
+  // Domain can point to the S3 bucket root or it can include folder path. For example:
+  // 1. https://models-resources.concord.org -> https://models-resources.s3.amazonaws.com
+  // 2. https://cfm-shared.concord.org -> https://models-resources.s3.amazonaws.com/cfm-shared
+  // 1. domain would require this option undefined or equal to false, while 2. requires it set to true.
+  domainIncludesFolder?: boolean;
 }
 
 export interface FirestoreIotOrganizationSettings extends ResourceSettings {
