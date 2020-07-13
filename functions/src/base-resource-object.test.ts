@@ -268,7 +268,7 @@ describe("Resource", () => {
           bucket: "test-bucket",
           folder: "test-folder",
           region: "test-region",
-          publicPath: "test/",
+          publicPath: "test-folder/test/",
           publicUrl: "https://cloudfront.domain.with-folder.com/test/"
         });
       });
