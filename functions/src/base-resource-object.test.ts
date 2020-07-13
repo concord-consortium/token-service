@@ -254,6 +254,24 @@ describe("Resource", () => {
           publicUrl: "https://cloudfront.domain.com/test-folder/test/"
         });
       });
+
+      it("should return custom public path based on bucket when settings include domain and domainIncludesFolder=true", () => {
+        expect(createS3Resource().apiResult(
+          undefined,
+          {bucket: "test-bucket", folder: "test-folder", region: "test-region", domain: "https://cloudfront.domain.with-folder.com", domainIncludesFolder: true} as FireStoreResourceSettings)
+        ).toEqual({
+          id: "test",
+          name: "test",
+          description: "test",
+          type: "s3Folder",
+          tool: "glossary",
+          bucket: "test-bucket",
+          folder: "test-folder",
+          region: "test-region",
+          publicPath: "test/",
+          publicUrl: "https://cloudfront.domain.with-folder.com/test/"
+        });
+      });
     });
 
     it("should be capable of creating vortex configurations", () => {

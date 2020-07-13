@@ -96,7 +96,8 @@ The entry should look like this:
   tool: "example-app",
   type: "s3Folder",
   allowedAccessRuleTypes: ["user", "context"], // optionally "readWriteToken", check AccessRuleType type for all allowed values
-  domain: "https://cloudfront.domain.com" // optionally domain that will be used to construct public URL, usually a cloudfront domain
+  domain: "https://cloudfront.domain.com", // optionally domain that will be used to construct public URL, usually a cloudfront domain
+  domainIncludesFolder: true // optional, but it needs to be set when the domain points to S3 bucket folder, not just the root. It prevents token-service from appending folder to the path and URL again.
 ```
 
 ## Development Setup
