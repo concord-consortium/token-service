@@ -338,14 +338,15 @@ export class BaseResourceObject implements BaseResource {
 export class S3ResourceObject extends BaseResourceObject {
   getPublicPath(settings: FireStoreS3ResourceSettings) {
     const { id } = this;
-    // Domain can point to the S3 bucket root or it can include folder path.
-    if (settings.domain && settings.domainIncludesFolder) {
-      return `${id}/`;
-    }
     return `${settings.folder}/${id}/`;
   }
 
   getPublicUrl(settings: FireStoreS3ResourceSettings) {
+    // Domain can point to the S3 bucket root or it can include folder path.
+    if (settings.domain && settings.domainIncludesFolder) {
+      const { id } = this;
+      return `${settings.domain}/${id}/`;
+    }
     if (settings.domain) {
       return `${settings.domain}/${this.getPublicPath(settings)}`;
     }
