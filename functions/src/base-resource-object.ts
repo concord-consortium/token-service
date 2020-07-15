@@ -424,12 +424,20 @@ export class S3ResourceObject extends BaseResourceObject {
         accessKeyId: config.aws.key,
         secretAccessKey: config.aws.secret
       });
+      let roleSessionName = `token-service-${this.type}-${this.tool}-${this.id}`;
+      // Max length of this value is 64, see: https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
+      // Preprocess roleSessionName when necessary.
+      if (roleSessionName.length > 64) {
+        // md5 hash has 32 characters.
+        const md5Hash = crypto.createHash("md5").update(`${this.type}-${this.tool}-${this.id}`).digest("hex");
+        roleSessionName = `token-service-${md5Hash}`;
+      }
       const params: STS.AssumeRoleRequest = {
         DurationSeconds: config.aws.s3credentials.duration,
         // ExternalId: // not needed
         Policy: policy,
         RoleArn: config.aws.s3credentials.rolearn,
-        RoleSessionName: `token-service-${this.type}-${this.tool}-${this.id}`
+        RoleSessionName: roleSessionName
       };
       sts.assumeRole(params, (err, data) => {
         if (err) {
