@@ -56,7 +56,7 @@ export const createFile = async ({ filename, fileContent, firebaseJwt, tokenServ
   const resource: S3Resource = await client.createResource({
     tool: "example-app",
     type: "s3Folder",
-    name: "test file" + filename,
+    name: "test file " + filename,
     description: "test file",
     accessRuleType: anonymous ? "readWriteToken" : "user"
   }) as S3Resource;
@@ -129,6 +129,39 @@ export const updateFile = async ({ filename, newFileContent, resourceId, firebas
     ContentType: "text/html",
     ContentEncoding: "UTF-8",
     CacheControl: "no-cache"
+  }).promise();
+  console.log(result);
+};
+
+interface IDeleteFileArgs {
+  filename: string;
+  resourceId: string;
+  firebaseJwt?: string;
+  readWriteToken?: string;
+  tokenServiceEnv: "dev" | "staging";
+}
+export const deleteFile = async ({ filename, resourceId, firebaseJwt, readWriteToken, tokenServiceEnv}: IDeleteFileArgs) => {
+  // This function accepts either firebaseJWT or readWriteToken. There are only two things that depend on authentication method:
+  // - TokenServiceClient constructor arguments. If user should be authenticated during every call to the API, provide `jwt` param.
+  // - getCredentials call. If user is not authenticated, readWriteToken needs to be provided instead.
+  const anonymous = !firebaseJwt && readWriteToken;
+
+  const client = anonymous ? new TokenServiceClient({ env: tokenServiceEnv }) : new TokenServiceClient({ env: tokenServiceEnv, jwt: firebaseJwt })
+  const resource: S3Resource = await client.getResource(resourceId) as S3Resource;
+  console.log("get resource:", resource);
+
+  const credentials = anonymous ? await client.getCredentials(resource.id, readWriteToken) : await client.getCredentials(resource.id);
+  console.log("credentials:", credentials);
+
+  // S3 configuration is based both on resource and credentials info.
+  const { bucket, region } = resource;
+  const { accessKeyId, secretAccessKey, sessionToken } = credentials;
+  const s3 = new AWS.S3({ region, accessKeyId, secretAccessKey, sessionToken });
+  const publicPath = client.getPublicS3Path(resource, filename);
+
+  const result = await s3.deleteObject({
+    Bucket: bucket,
+    Key: publicPath
   }).promise();
   console.log(result);
 };
