@@ -120,7 +120,7 @@ app. Its build process can also be run directly from example-app dir using `npm 
 
 To start local server with example app:
 
-1. `cd functions` (all the commands below should be executed in `example-app/` dir)
+1. `cd example-app` (all the commands below should be executed in `example-app/` dir)
 2. Install dependencies: `npm i`
 3. Start local server: `npm start`
 

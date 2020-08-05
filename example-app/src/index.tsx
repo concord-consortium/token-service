@@ -74,6 +74,16 @@ const AppComponent = () => {
     alert("Done! Open the file again.");
   };
 
+  const handleDeleteFileUsingJWT = async () => {
+    await helpers.deleteFile({ filename, resourceId, firebaseJwt, tokenServiceEnv });
+    alert("Done! Try to open the file again - you should see 404 Not Found.");
+  };
+
+  const handleDeleteFileAnonymously = async () => {
+    await helpers.deleteFile({ filename, resourceId, readWriteToken, tokenServiceEnv });
+    alert("Done! Try to open the file again -  you should see 404 Not Found.");
+  };
+
   const handleLogAllMyResources = () => {
     helpers.logAllResources(firebaseJwt, true, tokenServiceEnv as "dev" | "staging");
   };
@@ -148,6 +158,16 @@ const AppComponent = () => {
         </p>
         <p>
           <button onClick={handleUpdateFileAnonymously} disabled={!readWriteToken}>Update using readWriteToken</button>
+        </p>
+      </div>
+
+      <div className={`section ${resourceId ? "" : "disabled"}`}>
+        <h3>Delete File</h3>
+        <p>
+          <button onClick={handleDeleteFileUsingJWT} disabled={!firebaseJwt || !!readWriteToken}>Delete using Firebase JWT (File needs to be created using JWT)</button>
+        </p>
+        <p>
+          <button onClick={handleDeleteFileAnonymously} disabled={!readWriteToken}>Delete using readWriteToken</button>
         </p>
       </div>
 
