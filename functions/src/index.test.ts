@@ -1,4 +1,4 @@
-// @firebase/testing module is used to interact with the emulator that runs locally.
+// @firebase/rules-unit-testing module is used to interact with the emulator that runs locally.
 // It's mostly described in the context of Firestore rules testing: https://firebase.google.com/docs/rules/unit-tests
 import * as firebaseTesting from "@firebase/rules-unit-testing";
 import * as firebaseFunctionsTest from "firebase-functions-test";
