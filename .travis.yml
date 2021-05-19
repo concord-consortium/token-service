@@ -10,7 +10,6 @@ cache:
   npm: true
 install:
   - travis_retry gem install s3_website -v 3.4.0
-  - travis_retry pip install awscli --upgrade --user
   - cd functions && travis_retry npm ci && cd ..
   - cd client && travis_retry npm ci && cd ..
   - cd example-app && travis_retry npm ci && cd ..
