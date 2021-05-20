@@ -19,7 +19,7 @@ const AppComponent = () => {
   const [readWriteToken, setReadWriteToken] = useState("");
   const [filePublicUrl, setFilePublicUrl] = useState("");
 
-  const tokenServiceEnv: "dev" | "staging" = ["dev","staging"].includes(rawTokenServiceEnv) ? rawTokenServiceEnv as "dev" | "staging" : "staging";
+  const tokenServiceEnv = ["dev","staging"].includes(rawTokenServiceEnv) ? rawTokenServiceEnv as "dev" | "staging" : "staging";
 
   useEffect(() => {
     setPortalAccessToken(helpers.readPortalAccessToken());
