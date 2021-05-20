@@ -19,8 +19,7 @@ const AppComponent = () => {
   const [readWriteToken, setReadWriteToken] = useState("");
   const [filePublicUrl, setFilePublicUrl] = useState("");
 
-  // TODO hacky
-  const tokenServiceEnv: "dev" | "staging" = rawTokenServiceEnv as "dev" | "staging";
+  const tokenServiceEnv: "dev" | "staging" = ["dev","staging"].includes(rawTokenServiceEnv) ? rawTokenServiceEnv as "dev" | "staging" : "staging";
 
   useEffect(() => {
     setPortalAccessToken(helpers.readPortalAccessToken());
@@ -80,7 +79,10 @@ const AppComponent = () => {
     <div>
       <div className="section">
         <h3>Token Service Configuration</h3>
-        <p>Token Service Env: <input {...tokenServiceEnvProps}/></p>
+        <p>Token Service Env: <select {...tokenServiceEnvProps} >
+          <option value="dev">dev</option>
+          <option value="staging">staging</option>
+        </select></p>
         <p className="hint">
           "dev" or "staging". Note that "dev" requires running local server at localhost:5000, see: <a target="_blank" href="https://github.com/concord-consortium/token-service#development-setup">https://github.com/concord-consortium/token-service#development-setup</a><br/>
           If you use "staging", you should see a new entry in this collection each time you upload a file: <a target="_blank" href="https://console.firebase.google.com/project/token-service-staging/database/firestore/data~2Fstaging:resources">https://console.firebase.google.com/project/token-service-staging/database/firestore/data~2Fstaging:resources</a>
