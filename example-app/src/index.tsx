@@ -1,46 +1,29 @@
 import React, { ChangeEvent, useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import * as helpers from "./helpers"
+import {useLocalStorageInput} from "./form-helpers"
 
 // Simple app handling configuration and using helpers.
 const AppComponent = () => {
-  const [tokenServiceEnv, setTokenServiceEnv] = useState<"dev" | "staging">(localStorage.getItem("tokenServiceEnv") as "dev" | "staging" || "staging");
-  const [portalUrl, setPortalUrl] = useState(localStorage.getItem("portalUrl") || "https://learn.staging.concord.org");
-  const [oauthClientName, setOauthClientName] = useState(localStorage.getItem("oauthClientName") || "token-service-example-app");
-  const [firebaseAppName, setFirebaseAppName] = useState(localStorage.getItem("firebaseApp") || "token-service");
+  const [rawTokenServiceEnv, tokenServiceEnvProps] = useLocalStorageInput("tokenServiceEnv",  "staging");
+  const [portalUrl, portalUrlProps] = useLocalStorageInput("portalUrl", "https://learn.staging.concord.org");
+  const [oauthClientName, oauthClientNameProps] = useLocalStorageInput("oauthClientName", "token-service-example-app");
+  const [firebaseAppName, firebaseAppNameProps] = useLocalStorageInput("firebaseApp", "token-service");
+  const [firebaseJwt, firebaseJwtProps, setFirebaseJwt] = useLocalStorageInput("firebaseJwt", "");
+  const [filename, filenameProps] = useLocalStorageInput("filename", "test.txt");
+  const [fileContent, fileContentProps] = useLocalStorageInput("fileContent", "Hello world");
+  const [newFileContent, newFileContentProps] = useLocalStorageInput("newFileContent", "Updated file content");
+
   const [portalAccessToken, setPortalAccessToken] = useState("");
-  const [firebaseJwt, setFirebaseJwt] = useState("");
-  const [filename, setFilename] = useState("test.txt");
-  const [fileContent, setFileContent] = useState("Hello world");
   const [resourceId, setResourceId] = useState("");
   const [readWriteToken, setReadWriteToken] = useState("");
-  const [newFileContent, setNewFileContent] = useState("Updated file content");
   const [filePublicUrl, setFilePublicUrl] = useState("");
+
+  const tokenServiceEnv = ["dev","staging"].includes(rawTokenServiceEnv) ? rawTokenServiceEnv as "dev" | "staging" : "staging";
 
   useEffect(() => {
     setPortalAccessToken(helpers.readPortalAccessToken());
   }, []);
-
-  const changeText = (prop: string, event: ChangeEvent<HTMLInputElement>) => {
-    if (prop === "portalUrl") {
-      setPortalUrl(event.target.value);
-    } else if (prop === "oauthClientName") {
-      setOauthClientName(event.target.value);
-    } else if (prop === "firebaseAppName") {
-      setFirebaseAppName(event.target.value);
-    } else if (prop === "fileContent") {
-      setFileContent(event.target.value);
-    } else if (prop === "filename") {
-      setFilename(event.target.value);
-    } else if (prop === "tokenServiceEnv") {
-      setTokenServiceEnv(event.target.value as "dev" || "staging");
-    } else if (prop === "firebaseJwt") {
-      setFirebaseJwt(event.target.value);
-    } else if (prop === "newFileContent") {
-      setNewFileContent(event.target.value);
-    }
-    localStorage.setItem(prop, event.target.value);
-  };
 
   const handleAuthorizeInPortal = () => {
     helpers.authorizeInPortal(portalUrl, oauthClientName);
@@ -85,18 +68,21 @@ const AppComponent = () => {
   };
 
   const handleLogAllMyResources = () => {
-    helpers.logAllResources(firebaseJwt, true, tokenServiceEnv as "dev" | "staging");
+    helpers.logAllResources(firebaseJwt, true, tokenServiceEnv);
   };
 
   const handleLogAllResources = () => {
-    helpers.logAllResources(firebaseJwt, false, tokenServiceEnv as "dev" | "staging");
+    helpers.logAllResources(firebaseJwt, false, tokenServiceEnv);
   };
 
   return (
     <div>
       <div className="section">
         <h3>Token Service Configuration</h3>
-        <p>Token Service Env: <input type="text" value={tokenServiceEnv} onChange={changeText.bind(null, "tokenServiceEnv")}/></p>
+        <p>Token Service Env: <select {...tokenServiceEnvProps} >
+          <option value="dev">dev</option>
+          <option value="staging">staging</option>
+        </select></p>
         <p className="hint">
           "dev" or "staging". Note that "dev" requires running local server at localhost:5000, see: <a target="_blank" href="https://github.com/concord-consortium/token-service#development-setup">https://github.com/concord-consortium/token-service#development-setup</a><br/>
           If you use "staging", you should see a new entry in this collection each time you upload a file: <a target="_blank" href="https://console.firebase.google.com/project/token-service-staging/database/firestore/data~2Fstaging:resources">https://console.firebase.google.com/project/token-service-staging/database/firestore/data~2Fstaging:resources</a>
@@ -113,8 +99,8 @@ const AppComponent = () => {
         {
           !portalAccessToken &&
           <>
-            <p>Portal URL: <input type="text" value={portalUrl} onChange={changeText.bind(null, "portalUrl")}/></p>
-            <p>Oauth Client Name: <input type="text" value={oauthClientName} onChange={changeText.bind(null, "oauthClientName")}/></p>
+            <p>Portal URL: <input {...portalUrlProps}/></p>
+            <p>Oauth Client Name: <input {...oauthClientNameProps}/></p>
             <p className="hint">
               It has to be configured in Portal → Admin → Auth Clients. Client must have "public" type and list
               redirect URI which is exactly matching URL of this site: {window.location.toString()}.
@@ -125,20 +111,20 @@ const AppComponent = () => {
           </>
         }
         <p>Portal Access Token: {portalAccessToken && <input value={portalAccessToken} disabled={true}/> || "N/A"}</p>
-        <p>Firebase App Name: <input type="text" value={firebaseAppName} onChange={changeText.bind(null, "firebaseAppName")}/></p>
+        <p>Firebase App Name: <input {...firebaseAppNameProps}/></p>
         <p className="hint">
           It has to be configured in Portal → Admin → Firebase Apps
         </p>
         <p>
           <button onClick={handleGetFirebaseJwt}>Get FirebaseJWT</button>
         </p>
-        <p>Firebase JWT: {firebaseJwt && <input value={firebaseJwt} onChange={changeText.bind(null, "firebaseJwt")}/> || "N/A"}</p>
+        <p>Firebase JWT: {firebaseJwt && <input {...firebaseJwtProps}/> || "N/A"}</p>
       </div>
 
       <div className="section">
         <h3>Create New File</h3>
-        <p>Filename: <input type="text" value={filename} onChange={changeText.bind(null, "filename")}/></p>
-        <p><textarea value={fileContent} onChange={changeText.bind(null, "fileContent")}/></p>
+        <p>Filename: <input {...filenameProps}/></p>
+        <p><textarea {...fileContentProps}/></p>
         <p>
           <button onClick={handleCreateFileUsingJWT} disabled={!firebaseJwt}>Create using Firebase JWT (Portal auth necessary)</button>
         </p>
@@ -152,7 +138,7 @@ const AppComponent = () => {
 
       <div className={`section ${resourceId ? "" : "disabled"}`}>
         <h3>Update File</h3>
-        <p><textarea value={newFileContent} onChange={changeText.bind(null, "newFileContent")}/></p>
+        <p><textarea {...newFileContentProps}/></p>
         <p>
           <button onClick={handleUpdateFileUsingJWT} disabled={!firebaseJwt || !!readWriteToken}>Update using Firebase JWT (File needs to be created using JWT)</button>
         </p>

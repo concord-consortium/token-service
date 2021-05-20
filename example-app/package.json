@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "webpack serve --inline --hot --content-base dist/ --host 0.0.0.0",
+    "start:secure": "webpack serve --https --inline --hot --content-base dist/ --cert ~/.localhost-ssl/localhost.pem --key ~/.localhost-ssl/localhost.key",
     "build": "webpack",
     "client:build": "cd ../client && npm run build",
     "lint": "tslint -c tslint.json 'src/**/*.{ts,tsx}'",
