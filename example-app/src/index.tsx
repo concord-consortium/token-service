@@ -1,7 +1,11 @@
-import React, { ChangeEvent, useEffect, useState } from "react";
+import React, { useEffect, useState, ChangeEvent } from "react";
 import ReactDOM from "react-dom";
-import * as helpers from "./helpers"
-import {useLocalStorageInput} from "./form-helpers"
+import * as helpers from "./helpers";
+import { Section, useLocalStorageInput, useInput} from "./form";
+import { Resource, S3Resource, EnvironmentName, ResourceType, Credentials } from "@concord-consortium/token-service";
+import { S3Demo } from "./s3-demo";
+
+type ResourceMap = {[key: string]: Resource};
 
 // Simple app handling configuration and using helpers.
 const AppComponent = () => {
@@ -10,16 +14,20 @@ const AppComponent = () => {
   const [oauthClientName, oauthClientNameProps] = useLocalStorageInput("oauthClientName", "token-service-example-app");
   const [firebaseAppName, firebaseAppNameProps] = useLocalStorageInput("firebaseApp", "token-service");
   const [firebaseJwt, firebaseJwtProps, setFirebaseJwt] = useLocalStorageInput("firebaseJwt", "");
-  const [filename, filenameProps] = useLocalStorageInput("filename", "test.txt");
-  const [fileContent, fileContentProps] = useLocalStorageInput("fileContent", "Hello world");
-  const [newFileContent, newFileContentProps] = useLocalStorageInput("newFileContent", "Updated file content");
+  const [resourceType, resourceTypeProps] = useLocalStorageInput("resourceType", "s3Folder");
+
+  const [createResourceName, createResourceNameProps] = useInput("test-resource");
+  const [createResourceDescription, createResourceDescriptionProps] = useInput("created by example-app");
+
+  const [currentResource, setCurrentResource] = useState<Resource | undefined>();
+  const [credentials, setCredentials] = useState<Credentials | undefined>();
 
   const [portalAccessToken, setPortalAccessToken] = useState("");
-  const [resourceId, setResourceId] = useState("");
-  const [readWriteToken, setReadWriteToken] = useState("");
-  const [filePublicUrl, setFilePublicUrl] = useState("");
+  const [resources, setResources] = useState({} as ResourceMap);
+  const [resourcesStatus, setResourcesStatus] = useState("use button to load list");
 
-  const tokenServiceEnv = ["dev","staging"].includes(rawTokenServiceEnv) ? rawTokenServiceEnv as "dev" | "staging" : "staging";
+  // Limit the enviornment to dev or staging
+  const tokenServiceEnv = ["dev","staging"].includes(rawTokenServiceEnv) ? rawTokenServiceEnv as EnvironmentName : "staging";
 
   useEffect(() => {
     setPortalAccessToken(helpers.readPortalAccessToken());
@@ -33,52 +41,83 @@ const AppComponent = () => {
     helpers.getFirebaseJwt(portalUrl, portalAccessToken, firebaseAppName).then(token => setFirebaseJwt(token));
   };
 
-  const handleCreateFileUsingJWT = async () => {
-    const result = await helpers.createFile({ filename, fileContent, firebaseJwt, tokenServiceEnv });
-    setFilePublicUrl(result.publicUrl);
-    setResourceId(result.resourceId);
-    setReadWriteToken("");
+  const createResource = async (authenticated: boolean) => {
+    const resource = await helpers.createResource({
+      resourceType: resourceType as ResourceType, // TODO Hacky
+      resourceName: createResourceName,
+      resourceDescription: createResourceDescription,
+      firebaseJwt: authenticated ? firebaseJwt: undefined,
+      tokenServiceEnv
+    });
+    setResources(_resources => {
+      _resources[resource.id] = resource;
+      return _resources;
+    });
+    setCurrentResource(resource);
+    setCredentials(undefined);
   };
 
-  const handleCreateFileAnonymously = async () => {
-    const result = await helpers.createFile({ filename, fileContent, tokenServiceEnv });
-    setFilePublicUrl(result.publicUrl);
-    setResourceId(result.resourceId);
-    setReadWriteToken(result.readWriteToken);
+  const handleCreateAuthenticatedResource = () => {
+    createResource(true);
   };
 
-  const handleUpdateFileUsingJWT = async () => {
-    await helpers.updateFile({ filename, newFileContent, resourceId, firebaseJwt, tokenServiceEnv });
-    alert("Done! Open the file again.");
+  const handleCreateAnonymousResource = async () => {
+    createResource(false);
   };
 
-  const handleUpdateFileAnonymously = async () => {
-    await helpers.updateFile({ filename, newFileContent, resourceId, readWriteToken, tokenServiceEnv });
-    alert("Done! Open the file again.");
+  const handleListMyResources = async () => {
+    // Clear existing resources
+    setResources({} as ResourceMap);
+    setResourcesStatus("loading...");
+    const resourceList = await helpers.listResources(firebaseJwt, true, tokenServiceEnv, resourceType as ResourceType);
+    if(resourceList.length === 0) {
+      setResourcesStatus("no resources found");
+    } else {
+      setResourcesStatus("loaded");
+      setResources(resourceList.reduce((map: ResourceMap, resource: Resource) => {
+        map[resource.id] = resource;
+        return map;
+      }, {} as ResourceMap));
+      setCurrentResource(resourceList[0]);
+      setCredentials(undefined);
+    }
   };
 
-  const handleDeleteFileUsingJWT = async () => {
-    await helpers.deleteFile({ filename, resourceId, firebaseJwt, tokenServiceEnv });
-    alert("Done! Try to open the file again - you should see 404 Not Found.");
+  const handleMyResourcesChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setCurrentResource(resources[event.target.value]);
+    setCredentials(undefined);
   };
 
-  const handleDeleteFileAnonymously = async () => {
-    await helpers.deleteFile({ filename, resourceId, readWriteToken, tokenServiceEnv });
-    alert("Done! Try to open the file again -  you should see 404 Not Found.");
+  const handleDeleteResource = async () => {
+    if(!currentResource){
+      return;
+    }
+    await helpers.deleteResource({
+      resource: currentResource,
+      firebaseJwt,
+      tokenServiceEnv
+    });
   };
 
-  const handleLogAllMyResources = () => {
-    helpers.logAllResources(firebaseJwt, true, tokenServiceEnv);
+  const handleGetCredentials = async () => {
+    if(!currentResource){
+      return;
+    }
+    const _credentials = await helpers.getCredentials({
+      resource: currentResource,
+      firebaseJwt,
+      tokenServiceEnv
+    })
+    setCredentials(_credentials);
   };
 
   const handleLogAllResources = () => {
-    helpers.logAllResources(firebaseJwt, false, tokenServiceEnv);
+    helpers.logAllResources(firebaseJwt, tokenServiceEnv);
   };
 
   return (
     <div>
-      <div className="section">
-        <h3>Token Service Configuration</h3>
+      <Section title="Token Service Configuration">
         <p>Token Service Env: <select {...tokenServiceEnvProps} >
           <option value="dev">dev</option>
           <option value="staging">staging</option>
@@ -87,10 +126,13 @@ const AppComponent = () => {
           "dev" or "staging". Note that "dev" requires running local server at localhost:5000, see: <a target="_blank" href="https://github.com/concord-consortium/token-service#development-setup">https://github.com/concord-consortium/token-service#development-setup</a><br/>
           If you use "staging", you should see a new entry in this collection each time you upload a file: <a target="_blank" href="https://console.firebase.google.com/project/token-service-staging/database/firestore/data~2Fstaging:resources">https://console.firebase.google.com/project/token-service-staging/database/firestore/data~2Fstaging:resources</a>
         </p>
-      </div>
+        <p>Resource Type: <select {...resourceTypeProps} >
+          <option value="s3Folder">s3Folder</option>
+          <option value="iotOrganization">iotOrganization</option>
+        </select></p>
+      </Section>
 
-      <div className="section">
-        <h3>Portal Configuration</h3>
+      <Section title="Portal Configuration">
         <p className="hint">
           Token Service requires FirebaseJWT that can be obtained from Portal. Provide Portal configuration, click
           "Authorize in Portal" (it will require a login at the Portal if your user is not currently logged in) and then
@@ -119,49 +161,54 @@ const AppComponent = () => {
           <button onClick={handleGetFirebaseJwt}>Get FirebaseJWT</button>
         </p>
         <p>Firebase JWT: {firebaseJwt && <input {...firebaseJwtProps}/> || "N/A"}</p>
-      </div>
+      </Section>
 
-      <div className="section">
-        <h3>Create New File</h3>
-        <p>Filename: <input {...filenameProps}/></p>
-        <p><textarea {...fileContentProps}/></p>
-        <p>
-          <button onClick={handleCreateFileUsingJWT} disabled={!firebaseJwt}>Create using Firebase JWT (Portal auth necessary)</button>
-        </p>
-        <p>
-          <button onClick={handleCreateFileAnonymously}>Create Anonymously (generates readWriteToken, Portal auth not necessary)</button>
-        </p>
-        { filePublicUrl && <a target="_blank" href={filePublicUrl}>{filePublicUrl}</a> }
-        { resourceId && <p>Resource ID: {resourceId}</p> }
-        { readWriteToken && <p>readWriteToken: {readWriteToken}</p> }
-      </div>
+      <Section title={`My ${resourceType} Resources`}>
+        <p><button onClick={handleListMyResources} disabled={!firebaseJwt}>Fetch List (Firebase JWT necessary)</button></p>
+        { Object.keys(resources).length > 0 ?
+            <p><select size={8} value={currentResource && currentResource.id} onChange={handleMyResourcesChange}>
+              {Object.values(resources).map((resource) =>
+                <option key={resource.id} value={resource.id}>{resource.name} ({resource.id})</option>
+              )}
+            </select></p>
+          :
+            <p>{resourcesStatus}</p>
+        }
+      </Section>
 
-      <div className={`section ${resourceId ? "" : "disabled"}`}>
-        <h3>Update File</h3>
-        <p><textarea {...newFileContentProps}/></p>
-        <p>
-          <button onClick={handleUpdateFileUsingJWT} disabled={!firebaseJwt || !!readWriteToken}>Update using Firebase JWT (File needs to be created using JWT)</button>
-        </p>
-        <p>
-          <button onClick={handleUpdateFileAnonymously} disabled={!readWriteToken}>Update using readWriteToken</button>
-        </p>
-      </div>
+      <Section title={`Create ${resourceType} Resource`}>
+        <p>Name: <input {...createResourceNameProps}/></p>
+        <p>Description: <input {...createResourceDescriptionProps}/></p>
+        <p><button onClick={handleCreateAnonymousResource}>Create Anonymous Resource</button></p>
+        <p><button onClick={handleCreateAuthenticatedResource} disabled={!firebaseJwt}>Create Authenticated Resource (Firebase JWT necessary)</button></p>
+      </Section>
 
-      <div className={`section ${resourceId ? "" : "disabled"}`}>
-        <h3>Delete File</h3>
-        <p>
-          <button onClick={handleDeleteFileUsingJWT} disabled={!firebaseJwt || !!readWriteToken}>Delete using Firebase JWT (File needs to be created using JWT)</button>
-        </p>
-        <p>
-          <button onClick={handleDeleteFileAnonymously} disabled={!readWriteToken}>Delete using readWriteToken</button>
-        </p>
-      </div>
+      <Section title="Current Resource">
+        { currentResource ?
+            // It'd be mice for this to just show the name and be able to expand to show the full resource
+            <pre>{JSON.stringify(currentResource,null, 2)}</pre>
+          :
+            <p>no resource selected</p>
+        }
+        <p><button onClick={handleDeleteResource} disabled={!currentResource}>Delete Resource</button></p>
+        <p className="hint">Warning: this only deletes the Resource in the token service. It does not delete
+          files, objects or other items associated with the resource in AWS</p>
+        <p><button onClick={handleGetCredentials} disabled={!currentResource}>Get Credentials</button></p>
+        { credentials ?
+          // It'd be mice for this to just show the name and be able to expand to show the full resource
+          <pre>{JSON.stringify(credentials,null, 2)}</pre>
+        :
+          <p>request credentials for this resource</p>
+        }
+      </Section>
 
-      <div className="section">
-        <h3>Misc</h3>
-        <p><button onClick={handleLogAllMyResources} disabled={!firebaseJwt}>Log All My Resources (Firebase JWT necessary)</button></p>
+      { resourceType === "s3Folder" &&
+        <S3Demo credentials={credentials} s3Resource={currentResource as S3Resource} />
+      }
+
+      <Section title="Misc">
         <p><button onClick={handleLogAllResources}>Log All Resources</button></p>
-      </div>
+      </Section>
     </div>
   );
 };

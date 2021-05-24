@@ -2,7 +2,7 @@ import {Credentials, Resource, FindAllQuery, CreateQuery, UpdateQuery, S3Resourc
 import { getRWTokenFromAccessRules } from "../../functions/src/common-helpers";
 export * from "../../functions/src/resource-types";
 
-type EnvironmentName = "dev" | "staging" | "production"
+export type EnvironmentName = "dev" | "staging" | "production"
 
 export interface TokenServiceClientOptions {
   jwt?: string;
@@ -111,7 +111,7 @@ export class TokenServiceClient {
     })
   }
 
-  getReadWriteToken(resource: S3Resource): string | undefined {
+  getReadWriteToken(resource: Resource): string | undefined {
     return getRWTokenFromAccessRules(resource);
   }
 
