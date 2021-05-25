@@ -1,6 +1,6 @@
 import ClientOAuth2 from "client-oauth2";
-import { TokenServiceClient, S3Resource } from "@concord-consortium/token-service";
-import * as AWS from "aws-sdk";
+import { TokenServiceClient,
+  EnvironmentName, ResourceType, Resource, Credentials } from "@concord-consortium/token-service";
 
 // This file provides simple recipes showing how to use TokenServiceClient and how to get other necessary
 // prerequisites (auth in Portal, firebase JWT).
@@ -39,139 +39,71 @@ export const getFirebaseJwt = (portalUrl: string, portalAccessToken: string, fir
     .then(json => json.token)
 };
 
-interface ICreateFile {
-  filename: string;
-  fileContent: string;
+interface ICreateResource {
+  resourceType: ResourceType;
+  resourceName: string;
+  resourceDescription: string;
   firebaseJwt?: string;
-  tokenServiceEnv: "dev" | "staging";
+  tokenServiceEnv: EnvironmentName;
 }
-export const createFile = async ({ filename, fileContent, firebaseJwt, tokenServiceEnv }: ICreateFile) => {
+export const createResource = async ({ resourceType, resourceName, resourceDescription,
+  firebaseJwt, tokenServiceEnv }: ICreateResource): Promise<Resource> => {
   // This function optionally accepts firebaseJWT. There are three things that depend on authentication method:
   // - TokenServiceClient constructor arguments. If user should be authenticated during every call to the API, provide `jwt` param.
   // - createResource call. If user is not authenticated, "readWriteToken" accessRule type must be used. Token Service will generate and return readWriteToken.
-  // - getCredentials call. If user is not authenticated, readWriteToken needs to be provided instead.
   const anonymous = !firebaseJwt;
 
-  const client = anonymous ? new TokenServiceClient({ env: tokenServiceEnv }) : new TokenServiceClient({ env: tokenServiceEnv, jwt: firebaseJwt })
-  const resource: S3Resource = await client.createResource({
+  // The client will be anonymous if firebaseJwt undefined
+  const client = new TokenServiceClient({ env: tokenServiceEnv, jwt: firebaseJwt })
+  return client.createResource({
     tool: "example-app",
-    type: "s3Folder",
-    name: "test file " + filename,
-    description: "test file",
+    type: resourceType,
+    name: resourceName,
+    description: resourceDescription,
     accessRuleType: anonymous ? "readWriteToken" : "user"
-  }) as S3Resource;
-  console.log("new resource:", resource);
-
-  // Note that if your file ever needs to get updated, this token MUST BE (SECURELY) SAVED.
-  let readWriteToken = "";
-  if (anonymous) {
-    readWriteToken = client.getReadWriteToken(resource) || "";
-    console.log("read write token:", readWriteToken);
-  }
-
-  const credentials = anonymous ? await client.getCredentials(resource.id, readWriteToken) :  await client.getCredentials(resource.id);
-  console.log("credentials:", credentials);
-
-  // S3 configuration is based both on resource and credentials info.
-  const { bucket, region } = resource;
-  const { accessKeyId, secretAccessKey, sessionToken } = credentials;
-  const s3 = new AWS.S3({ region, accessKeyId, secretAccessKey, sessionToken });
-  const publicPath = client.getPublicS3Path(resource, filename);
-
-  const result = await s3.upload({
-    Bucket: bucket,
-    Key: publicPath,
-    Body: fileContent,
-    ContentType: "text/html",
-    ContentEncoding: "UTF-8",
-    CacheControl: "no-cache"
-  }).promise();
-  console.log(result);
-
-  return {
-    publicUrl: client.getPublicS3Url(resource, filename),
-    resourceId: resource.id,
-    readWriteToken
-  };
-};
-
-interface IUpdateFileArgs {
-  filename: string;
-  newFileContent: string;
-  resourceId: string;
-  firebaseJwt?: string;
-  readWriteToken?: string;
-  tokenServiceEnv: "dev" | "staging";
+  })
 }
-export const updateFile = async ({ filename, newFileContent, resourceId, firebaseJwt, readWriteToken, tokenServiceEnv}: IUpdateFileArgs) => {
-  // This function accepts either firebaseJWT or readWriteToken. There are only two things that depend on authentication method:
-  // - TokenServiceClient constructor arguments. If user should be authenticated during every call to the API, provide `jwt` param.
-  // - getCredentials call. If user is not authenticated, readWriteToken needs to be provided instead.
-  const anonymous = !firebaseJwt && readWriteToken;
 
-  const client = anonymous ? new TokenServiceClient({ env: tokenServiceEnv }) : new TokenServiceClient({ env: tokenServiceEnv, jwt: firebaseJwt })
-  const resource: S3Resource = await client.getResource(resourceId) as S3Resource;
-  console.log("get resource:", resource);
-
-  const credentials = anonymous ? await client.getCredentials(resource.id, readWriteToken) : await client.getCredentials(resource.id);
-  console.log("credentials:", credentials);
-
-  // S3 configuration is based both on resource and credentials info.
-  const { bucket, region } = resource;
-  const { accessKeyId, secretAccessKey, sessionToken } = credentials;
-  const s3 = new AWS.S3({ region, accessKeyId, secretAccessKey, sessionToken });
-  const publicPath = client.getPublicS3Path(resource, filename);
-
-  const result = await s3.upload({
-    Bucket: bucket,
-    Key: publicPath,
-    Body: newFileContent,
-    ContentType: "text/html",
-    ContentEncoding: "UTF-8",
-    CacheControl: "no-cache"
-  }).promise();
-  console.log(result);
-};
-
-interface IDeleteFileArgs {
-  filename: string;
-  resourceId: string;
-  firebaseJwt?: string;
-  readWriteToken?: string;
-  tokenServiceEnv: "dev" | "staging";
+interface IDeleteResource {
+  resource: Resource;
+  firebaseJwt: string;
+  tokenServiceEnv: EnvironmentName;
 }
-export const deleteFile = async ({ filename, resourceId, firebaseJwt, readWriteToken, tokenServiceEnv}: IDeleteFileArgs) => {
-  // This function accepts either firebaseJWT or readWriteToken. There are only two things that depend on authentication method:
-  // - TokenServiceClient constructor arguments. If user should be authenticated during every call to the API, provide `jwt` param.
-  // - getCredentials call. If user is not authenticated, readWriteToken needs to be provided instead.
-  const anonymous = !firebaseJwt && readWriteToken;
+export const deleteResource = async ({resource, firebaseJwt,
+  tokenServiceEnv}: IDeleteResource) => {
 
-  const client = anonymous ? new TokenServiceClient({ env: tokenServiceEnv }) : new TokenServiceClient({ env: tokenServiceEnv, jwt: firebaseJwt })
-  const resource: S3Resource = await client.getResource(resourceId) as S3Resource;
-  console.log("get resource:", resource);
+  const client = new TokenServiceClient({ env: tokenServiceEnv, jwt: firebaseJwt });
 
-  const credentials = anonymous ? await client.getCredentials(resource.id, readWriteToken) : await client.getCredentials(resource.id);
-  console.log("credentials:", credentials);
+  return client.deleteResource(resource.id);
+}
 
-  // S3 configuration is based both on resource and credentials info.
-  const { bucket, region } = resource;
-  const { accessKeyId, secretAccessKey, sessionToken } = credentials;
-  const s3 = new AWS.S3({ region, accessKeyId, secretAccessKey, sessionToken });
-  const publicPath = client.getPublicS3Path(resource, filename);
+interface IGetCredentials {
+  resource: Resource;
+  firebaseJwt?: string;
+  tokenServiceEnv: EnvironmentName;
+}
+export const getCredentials = async ({resource, firebaseJwt,
+  tokenServiceEnv}: IGetCredentials): Promise<Credentials> => {
 
-  const result = await s3.deleteObject({
-    Bucket: bucket,
-    Key: publicPath
-  }).promise();
-  console.log(result);
-};
+  // The jwt will be ignored if there is a readWriteToken on the resource
+  const client = new TokenServiceClient({ env: tokenServiceEnv, jwt: firebaseJwt })
+  const readWriteToken = client.getReadWriteToken(resource) || "";
 
-export const logAllResources = async (firebaseJwt: string, amOwner: boolean, tokenServiceEnv: "dev" | "staging") => {
+  return readWriteToken ? await client.getCredentials(resource.id, readWriteToken) :  await client.getCredentials(resource.id);
+}
+
+export const listResources = async (firebaseJwt: string, amOwner: boolean,
+  tokenServiceEnv: EnvironmentName, resourceType: ResourceType) => {
   const client = new TokenServiceClient({ jwt: firebaseJwt, env: tokenServiceEnv });
-  const resources = await client.listResources({
-    type: "s3Folder",
+  return client.listResources({
+    type: resourceType,
     tool: "example-app",
     amOwner: amOwner ? "true" : "false"
   });
+};
+
+export const logAllResources = async (firebaseJwt: string,
+  tokenServiceEnv: EnvironmentName, resourceType: ResourceType = "s3Folder") => {
+  const resources = await listResources(firebaseJwt, false, tokenServiceEnv, resourceType);
   console.log(resources);
 };
