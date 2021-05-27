@@ -1,6 +1,6 @@
 import { ResourceType } from "./resource-types";
 import { FireStoreResourceSettings } from "./firestore-types";
-import { BaseResourceObject } from "./base-resource-object";
+import * as manager from "./resource-manager";
 
 export const makeCachedSettingsGetter = (fsDb: FirebaseFirestore.Firestore, env: string) => {
   const settingsCache: {[key: string]: FireStoreResourceSettings} = {};
@@ -9,7 +9,7 @@ export const makeCachedSettingsGetter = (fsDb: FirebaseFirestore.Firestore, env:
       const key = type + tool;
       if (!settingsCache[key]) {
         // empty cache
-        BaseResourceObject.GetResourceSettings(fsDb, env, type, tool)
+        manager.getResourceSettings(fsDb, env, type, tool)
           .then(settings => {
             // cache settings and resolve promise
             settingsCache[key] = settings;

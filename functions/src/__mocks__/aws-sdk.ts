@@ -5,6 +5,7 @@ export const fakeAwsCredentials = {
   SessionToken: "test-session-token",
 };
 
+export const mockAssumeRole = jest.fn((params, callback) => callback(null, { Credentials: fakeAwsCredentials }));
 export class STS {
-  assumeRole = jest.fn((params, callback) => callback(null, { Credentials: fakeAwsCredentials }))
+  assumeRole = mockAssumeRole;
 }
