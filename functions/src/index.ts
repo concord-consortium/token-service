@@ -3,7 +3,7 @@ import * as admin from 'firebase-admin';
 import * as express from 'express';
 import * as bodyParser from 'body-parser';
 import * as cors from 'cors';
-import { BaseResourceObject } from './base-resource-object';
+import * as manager from './resource-manager';
 import { getRWTokenFromAccessRules } from './common-helpers';
 import { makeCachedSettingsGetter } from './helpers'
 import { Config, ReadWriteTokenPrefix } from './resource-types';
@@ -194,7 +194,7 @@ app.get('/api/v1/resources', (req, res) => {
   try {
     // Auth/claims are optional and necessary only if user wants to see more details or his own resources only.
     const claims = optionallyAuthUsingJWT(req);
-    BaseResourceObject.FindAll(db, req.env, claims, req.query)
+    manager.findAllResources(db, req.env, claims, req.query)
       .then(resources => Promise.all(resources.map(async resource => resource.apiResult(claims, await getCachedSettings(resource.type, resource.tool)))))
       .then(apiResults => res.success(apiResults))
       .catch(error => res.error(400, error));
@@ -207,8 +207,8 @@ app.get('/api/v1/resources', (req, res) => {
 app.get('/api/v1/resources/:id', (req, res) => {
   try {
     const claims = optionallyAuthenticate(req);
-    BaseResourceObject.Find(db, req.env, req.params.id)
-      .then(async resource => res.success(resource.apiResult(claims, await BaseResourceObject.GetResourceSettings(db, req.env, resource.type, resource.tool))))
+    manager.findResource(db, req.env, req.params.id)
+      .then(async resource => res.success(resource.apiResult(claims, await manager.getResourceSettings(db, req.env, resource.type, resource.tool))))
       .catch(error => res.error(404, error))
   } catch (error) {
     // Auth token must have been malformed. In this case return 403 error, don't fallback to anonymous path.
@@ -219,7 +219,7 @@ app.get('/api/v1/resources/:id', (req, res) => {
 app.post('/api/v1/resources', (req, res) => {
   try {
     const claims = optionallyAuthUsingJWT(req);
-    BaseResourceObject.Create(db, req.env, claims, req.body)
+    manager.createResource(db, req.env, claims, req.body)
       .then(async resource => {
         let authClaims: AuthClaims | undefined = claims;
         if (!authClaims) {
@@ -227,7 +227,7 @@ app.post('/api/v1/resources', (req, res) => {
           const readWriteToken = getRWTokenFromAccessRules(resource);
           authClaims = readWriteToken ? { readWriteToken } : undefined;
         }
-        res.success(resource.apiResult(authClaims, await BaseResourceObject.GetResourceSettings(db, req.env, resource.type, resource.tool)), 201);
+        res.success(resource.apiResult(authClaims, await manager.getResourceSettings(db, req.env, resource.type, resource.tool)), 201);
       })
       .catch(error => res.error(400, error));
   } catch (error) {
@@ -239,8 +239,8 @@ app.post('/api/v1/resources', (req, res) => {
 app.patch('/api/v1/resources/:id', (req, res) => {
   try {
     const claims = authenticate(req);
-    BaseResourceObject.Update(db, req.env, claims, req.params.id, req.body)
-      .then(async resource => res.success(resource.apiResult(claims, await BaseResourceObject.GetResourceSettings(db, req.env, resource.type, resource.tool))))
+    manager.updateResource(db, req.env, claims, req.params.id, req.body)
+      .then(async resource => res.success(resource.apiResult(claims, await manager.getResourceSettings(db, req.env, resource.type, resource.tool))))
       .catch(error => res.error(400, error))
   } catch (error) {
     res.error(403, error);
@@ -251,7 +251,7 @@ app.post('/api/v1/resources/:id/credentials', (req, res) => {
   try {
     const claims = authenticate(req);
     const config = getValidatedConfig();
-    BaseResourceObject.CreateAWSKeys(db, req.env, claims, req.params.id, config)
+    manager.createAWSKeys(db, req.env, claims, req.params.id, config)
       .then(awsTemporaryCredentials => res.success(awsTemporaryCredentials))
       .catch(error => res.error(400, error))
   } catch (error) {
@@ -262,8 +262,7 @@ app.post('/api/v1/resources/:id/credentials', (req, res) => {
 app.delete('/api/v1/resources/:id', (req, res) => {
   try {
     const claims = authenticate(req);
-    BaseResourceObject
-      .delete(db, req.env, claims, req.params.id, req.body)
+    manager.deleteResource(db, req.env, claims, req.params.id, req.body)
       .then(deleteDate => res.success({ date: deleteDate }))
       .catch(error => res.error(400, error));
   } catch (error) {

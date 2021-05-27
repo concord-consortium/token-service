@@ -5,9 +5,9 @@ import * as firebaseFunctionsTest from "firebase-functions-test";
 import * as fs from "fs";
 import * as jwt from "jsonwebtoken";
 import * as supertest from "supertest";
-import { FireStoreS3Resource, FireStoreS3ResourceSettings } from "./firestore-types";
-import { CreateQuery, ReadWriteTokenPrefix, UpdateQuery, UserAccessRule } from "./resource-types";
-import { S3ResourceObject } from "./base-resource-object";
+import { FireStoreS3Resource, FireStoreS3ResourceSettings, FireStoreIotOrganizationResource } from "./firestore-types";
+import { CreateQuery, ReadWriteTokenPrefix, UpdateQuery, UserAccessRule, AccessRuleType } from "./resource-types";
+import { S3ResourceObject } from "./models/s3-resource-object";
 import { fakeAwsCredentials } from "./__mocks__/aws-sdk";
 // This is necessary automatically setup config for test environment.
 // If you want to connect to real Firestore, configuration can be provided here.
@@ -35,15 +35,16 @@ firebaseFunctionsEnv.mockConfig({
 // firebase.config() is used in the ./index module, so it needs to be mocked first.
 import { webApiV1, db } from "./index";
 
-const checkResponse = (response: any) => {
+const checkResponse = (response: any, expectedStatus: string = "success") => {
   const json = JSON.parse(response.text);
-  expect(json.status).toEqual("success");
+  expect(json.status).toEqual(expectedStatus);
   return json;
 }
 
 const expectedResourceObject = (
   { resource, settings, includeAccessRules }:
-  { resource: FireStoreS3Resource & {id: string} | CreateQuery & {id: string}, settings: FireStoreS3ResourceSettings, includeAccessRules: boolean }
+  { resource: FireStoreS3Resource & {id: string} | CreateQuery & {id: string} | FireStoreIotOrganizationResource & {id: string},
+    settings: FireStoreS3ResourceSettings, includeAccessRules: boolean }
 ) => ({
   id: resource.id,
   name: resource.name,
@@ -96,15 +97,33 @@ const jwtClaims = {
 
 const jwtToken = jwt.sign({ claims: jwtClaims }, testPrivKey, { algorithm: "RS256" });
 
+// Parial is used here so we make invalid settings
+const createFullS3Settings = async (settings: Partial<FireStoreS3ResourceSettings>) => {
+  await db.collection("dev:resourceSettings").doc("settings-id-1").set(settings);
+  // pretend the full settings are returned even if a partial was passed in
+  return settings as FireStoreS3ResourceSettings;
+};
 const createS3Settings = async (customSettings?: Partial<FireStoreS3ResourceSettings>) => {
   const finalSettings = Object.assign({}, s3Settings, customSettings);
-  await db.collection("dev:resourceSettings").doc("settings-id-1").set(finalSettings);
-  return finalSettings;
+  return createFullS3Settings(finalSettings);
 };
 const createS3Resource = async (customSettings?: Partial<FireStoreS3Resource>) => {
   const finalSettings = Object.assign({}, s3Resource, customSettings);
   const ref = await db.collection("dev:resources").add(finalSettings);
   return Object.assign({ id: ref.id }, finalSettings);
+};
+const iotResource: FireStoreIotOrganizationResource = {
+  name: "test",
+  description: "test",
+  type: "iotOrganization",
+  tool: "dataFlow",
+  accessRules: [
+    {type: "user", role: "owner", platformId: user.platformId, userId: user.userId},
+  ]
+}
+const createIotResource = async () => {
+  const ref = await db.collection("dev:resources").add(iotResource);
+  return Object.assign({ id: ref.id }, iotResource);
 };
 
 afterAll(async () => {
@@ -214,6 +233,29 @@ describe("token-service app", () => {
       const json = checkResponse(response);
       expect(json.result).toEqual(expectedResourceObject({ resource, settings, includeAccessRules: true }));
     });
+
+    it("returns error when there are no settings for the resource", async () => {
+      const resource = await createS3Resource();
+      const response = await supertest(webApiV1)
+        .get("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${readWriteToken}`)
+        .query({ env: "dev" })
+        .expect(404);
+
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual("No resource settings for s3Folder type with test-tool tool");
+    });
+
+    it("returns error when a resource with that id doesn't exist", async () => {
+      const response = await supertest(webApiV1)
+        .get("/api/v1/resources/1234")
+        .set("Authorization", `Bearer ${readWriteToken}`)
+        .query({ env: "dev" })
+        .expect(404);
+
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual("Resource 1234 not found!");
+    });
   });
 
   describe("GET api/v1/resources", () => {
@@ -272,6 +314,56 @@ describe("token-service app", () => {
       expect(json.result.length).toEqual(1);
       expect(json.result[0]).toEqual(expectedResourceObject({ resource: resource1, settings, includeAccessRules: true }));
     });
+
+    it("returns resources with a matching name", async () => {
+      const settings = await createS3Settings();
+      await createS3Resource();
+      const resource2 = await createS3Resource({name: "unique-name"});
+      // Ensure that we're dealing with EMPTY firestore db.
+      const response = await supertest(webApiV1)
+        .get("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev", name: "unique-name" })
+        .expect(200);
+
+      const json = checkResponse(response);
+      expect(json.result.length).toEqual(1);
+      expect(json.result[0]).toEqual(expectedResourceObject({ resource: resource2, settings, includeAccessRules: true }));
+    });
+
+    it("returns resources with a matching type", async () => {
+      const settings = await createS3Settings();
+      const resource1 = await createS3Resource();
+      await createIotResource();
+      // Ensure that we're dealing with EMPTY firestore db.
+      const response = await supertest(webApiV1)
+        .get("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev", type: "s3Folder" })
+        .expect(200);
+
+      const json = checkResponse(response);
+      expect(json.result.length).toEqual(1);
+      expect(json.result[0]).toEqual(expectedResourceObject({ resource: resource1, settings, includeAccessRules: true }));
+    });
+
+    it("returns resources with a matching tool", async () => {
+      await createS3Settings();
+      const settings = await createS3Settings({tool: "different-tool"});
+      await createS3Resource();
+      const resource2 = await createS3Resource({tool: "different-tool"});
+      // Ensure that we're dealing with EMPTY firestore db.
+      const response = await supertest(webApiV1)
+        .get("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev", tool: "different-tool" })
+        .expect(200);
+
+      const json = checkResponse(response);
+      expect(json.result.length).toEqual(1);
+      expect(json.result[0]).toEqual(expectedResourceObject({ resource: resource2, settings, includeAccessRules: true }));
+    });
+
   });
 
   describe("POST api/v1/resources", () => {
@@ -374,6 +466,88 @@ describe("token-service app", () => {
 
       expect(await getResourcesCount()).toEqual(1);
     });
+
+    it("returns an error if the resource is missing fields.", async () => {
+      const settings = await createS3Settings();
+
+      // query without description
+      const createQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+      };
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .send(Object.assign({}, createQuery, {accessRuleType: "user"}) as CreateQuery)
+        .expect(400);
+
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual("One or more missing resource fields!");
+    });
+
+    it("returns an error if the tool settings don't include allowAccessRuleTypes", async () => {
+      const invalidSettings = {...s3Settings};
+      delete invalidSettings.allowedAccessRuleTypes;
+      const settings = await createFullS3Settings(invalidSettings);
+
+      const createQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+        description: "desc"
+      };
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .send(Object.assign({}, createQuery, {accessRuleType: "user"}) as CreateQuery)
+        .expect(400);
+
+      const json = checkResponse(response, "error");
+      expect(json.error).toMatch(/.*configuration is missing allowedAccessRuleTypes list!/);
+    });
+
+    it("returns an error if the tool settings have an unknown rule type, and create tries to use it", async () => {
+      const settings = await createS3Settings({allowedAccessRuleTypes:["blah" as AccessRuleType]});
+
+      const createQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+        description: "desc"
+      };
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .send(Object.assign({}, createQuery, {accessRuleType: "blah"}) as CreateQuery)
+        .expect(400);
+
+      const json = checkResponse(response, "error");
+      expect(json.error).toMatch(/Unknown access rule type:.*/);
+    });
+
+    it("returns an error if the tool settings have an unknown resource type, and create tries to use it", async () => {
+      const settings = await createS3Settings({type: "blah" as any});
+
+      const createQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+        description: "desc"
+      };
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .send(Object.assign({}, createQuery, {accessRuleType: "user"}) as CreateQuery)
+        .expect(400);
+
+      const json = checkResponse(response, "error");
+      expect(json.error).toMatch(/Unknown resource type:.*/);
+    });
   });
 
   describe("PATCH api/v1/resources/:id", () => {
@@ -442,6 +616,20 @@ describe("token-service app", () => {
       expect(json.result).toEqual(expect.objectContaining(updateQuery));
       expect(await getFirstResource()).toEqual(expect.objectContaining(updateQuery));
     });
+
+    it("returns error when a resource with that id doesn't exist", async () => {
+      const updateQuery: UpdateQuery = { description: "new description" };
+      const response = await supertest(webApiV1)
+        .patch("/api/v1/resources/1234")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .send(updateQuery)
+        .query({ env: "dev" })
+        .expect(400);
+
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual("Resource 1234 not found!");
+    });
+
   });
 
   describe("POST api/v1/resources/:id/credentials", () => {
@@ -493,6 +681,20 @@ describe("token-service app", () => {
         sessionToken: fakeAwsCredentials.SessionToken,
         expiration: fakeAwsCredentials.Expiration
       });
+    });
+
+    it("returns an error when user is not owner or member(JWT)", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource({
+        accessRules: []
+      });
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(400);
+      const json = checkResponse(response, "error");
+      expect(json.error).toMatch(/You do not have permission to create AWS keys for resource .*!/);
     });
 
     it("returns credentials when user has readWriteToken", async () => {
@@ -563,6 +765,17 @@ describe("token-service app", () => {
         .expect(200);
       checkResponse(response);
       expect(await getResourcesCount()).toEqual(0);
+    });
+
+    it("returns error when a resource with that id doesn't exist", async () => {
+      const response = await supertest(webApiV1)
+        .delete("/api/v1/resources/1234")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(400);
+
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual("Resource 1234 not found!");
     });
   });
 });
