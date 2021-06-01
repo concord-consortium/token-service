@@ -3,6 +3,7 @@ import {
 } from "./firestore-types";
 import { S3ResourceObject } from "./models/s3-resource-object";
 import { IotResourceObject } from "./models/iot-resource-object";
+import { AthenaResourceObject } from "./models/athena-resource-object";
 import {
   ResourceType,
   FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
@@ -10,7 +11,7 @@ import {
 } from "./resource-types";
 import * as crypto from "crypto";
 
-export type ResourceObject = S3ResourceObject | IotResourceObject;
+export type ResourceObject = S3ResourceObject | IotResourceObject | AthenaResourceObject;
 
 const RESOURCE_COLLECTION_ID = 'resources';
 const RESOURCE_SETTINGS_COLLECTION_ID = 'resourceSettings';
@@ -47,6 +48,10 @@ export const fromDocumentSnapshot = (doc: FirebaseFirestore.DocumentSnapshot) =>
     case "iotOrganization":
       // tslint:disable-next-line: no-use-before-declare
       return new IotResourceObject(doc.id, data);
+
+    case "athenaWorkgroup":
+      // tslint:disable-next-line: no-use-before-declare
+      return new AthenaResourceObject(doc.id, data);
   }
 }
 
@@ -131,7 +136,7 @@ export const createResource = (db: FirebaseFirestore.Firestore, env: string, cla
         }
 
         // FIXME: centralize this list of types, it is also used in fromDocumentSnapshot
-        if (type !== "s3Folder" && type !== "iotOrganization") {
+        if (type !== "s3Folder" && type !== "iotOrganization" && type !== "athenaWorkgroup") {
           reject(`Unknown resource type: ${type}`);
           return;
         }

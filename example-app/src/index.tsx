@@ -2,8 +2,9 @@ import React, { useEffect, useState, ChangeEvent } from "react";
 import ReactDOM from "react-dom";
 import * as helpers from "./helpers";
 import { Section, useLocalStorageInput, useInput} from "./form";
-import { Resource, S3Resource, EnvironmentName, ResourceType, Credentials } from "@concord-consortium/token-service";
+import { Resource, S3Resource, AthenaResource, EnvironmentName, ResourceType, Credentials } from "@concord-consortium/token-service";
 import { S3Demo } from "./s3-demo";
+import { AthenaDemo } from "./athena-demo";
 
 type ResourceMap = {[key: string]: Resource};
 
@@ -128,6 +129,7 @@ const AppComponent = () => {
         </p>
         <p>Resource Type: <select {...resourceTypeProps} >
           <option value="s3Folder">s3Folder</option>
+          <option value="athenaWorkgroup">athenaWorkgroup</option>
           <option value="iotOrganization">iotOrganization</option>
         </select></p>
       </Section>
@@ -204,6 +206,10 @@ const AppComponent = () => {
 
       { resourceType === "s3Folder" &&
         <S3Demo credentials={credentials} s3Resource={currentResource as S3Resource} />
+      }
+
+      { resourceType === "athenaWorkgroup" &&
+        <AthenaDemo credentials={credentials} athenaResource={currentResource as AthenaResource} />
       }
 
       <Section title="Misc">
