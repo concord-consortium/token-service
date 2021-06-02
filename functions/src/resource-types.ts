@@ -9,10 +9,8 @@ export interface Config {
   aws: {
     key: string;
     secret: string;
-    s3credentials: {
-      rolearn: string;
-      duration: number;
-    }
+    rolearn: string;
+    duration: number;
   }
 }
 
@@ -37,6 +35,11 @@ export interface S3Resource extends BaseResource {
 export interface IotResource extends BaseResource {
 }
 
+export interface AthenaResource extends BaseResource {
+  region: string;
+  workgroupName: string;
+}
+
 export interface FindAllQuery {
   name?: string;
   type?: ResourceType;
@@ -58,11 +61,9 @@ export interface Credentials {
   expiration: Date;
   secretAccessKey: string;
   sessionToken: string;
-  bucket: string;
-  keyPrefix: string;
 }
 
-export type ResourceType = "s3Folder" | "iotOrganization";
+export type ResourceType = "s3Folder" | "iotOrganization" | "athenaWorkgroup";
 export type AccessRuleType = "user" | "readWriteToken";
 export type AccessRuleRole = "owner" | "member";
 

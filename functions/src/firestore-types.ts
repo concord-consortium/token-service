@@ -1,6 +1,6 @@
 import { AccessRuleType, ResourceType, AccessRule } from "./resource-types";
 
-export type FireStoreResource = FireStoreS3Resource | FireStoreIotOrganizationResource;
+export type FireStoreResource = FireStoreS3Resource | FireStoreIotOrganizationResource | FireStoreAthenaWorkgroupResource;
 
 export interface FirestoreBaseResource {
   name: string;
@@ -16,16 +16,19 @@ export interface FireStoreS3Resource extends FirestoreBaseResource {
 export interface FireStoreIotOrganizationResource extends FirestoreBaseResource {
   type: "iotOrganization"
 }
+export interface FireStoreAthenaWorkgroupResource extends FirestoreBaseResource {
+  type: "athenaWorkgroup"
+}
 
-export type FireStoreResourceSettings = FireStoreS3ResourceSettings | FirestoreIotOrganizationSettings;
+export type FireStoreResourceSettings = FireStoreS3ResourceSettings | FireStoreIotOrganizationSettings | FireStoreAthenaWorkgroupSettings;
 
-export interface ResourceSettings {
+interface FireStoreBaseResourceSettings {
   type: ResourceType;
   tool: string;
   allowedAccessRuleTypes: AccessRuleType[];
 }
 
-export interface FireStoreS3ResourceSettings extends ResourceSettings {
+export interface FireStoreS3ResourceSettings extends FireStoreBaseResourceSettings {
   type: "s3Folder";
   bucket: string;
   folder: string;
@@ -39,8 +42,18 @@ export interface FireStoreS3ResourceSettings extends ResourceSettings {
   domainIncludesFolder?: boolean;
 }
 
-export interface FirestoreIotOrganizationSettings extends ResourceSettings {
+export interface FireStoreIotOrganizationSettings extends FireStoreBaseResourceSettings {
   type: "iotOrganization";
+}
+
+export interface FireStoreAthenaWorkgroupSettings extends FireStoreBaseResourceSettings {
+  type: "athenaWorkgroup";
+  // Settings to restrict the s3 access to download the workgroup's files
+  bucket: string;
+  folder: string;
+  region: string;
+  // id of the aws account used in athena workgroup arn
+  account: string;
 }
 
 export interface JWTClaims {

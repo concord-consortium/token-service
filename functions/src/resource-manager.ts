@@ -3,6 +3,7 @@ import {
 } from "./firestore-types";
 import { S3ResourceObject } from "./models/s3-resource-object";
 import { IotResourceObject } from "./models/iot-resource-object";
+import { AthenaResourceObject } from "./models/athena-resource-object";
 import {
   ResourceType,
   FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
@@ -10,7 +11,7 @@ import {
 } from "./resource-types";
 import * as crypto from "crypto";
 
-export type ResourceObject = S3ResourceObject | IotResourceObject;
+export type ResourceObject = S3ResourceObject | IotResourceObject | AthenaResourceObject;
 
 const RESOURCE_COLLECTION_ID = 'resources';
 const RESOURCE_SETTINGS_COLLECTION_ID = 'resourceSettings';
@@ -37,17 +38,18 @@ export const getResourceSettings = (db: FirebaseFirestore.Firestore, env: string
   });
 }
 
+const resourceTypeObjects = {
+  s3Folder: S3ResourceObject,
+  iotOrganization: IotResourceObject,
+  athenaWorkgroup: AthenaResourceObject
+} as const;
+const resourceTypes = Object.keys(resourceTypeObjects);
+
 export const fromDocumentSnapshot = (doc: FirebaseFirestore.DocumentSnapshot) => {
   const data: FireStoreResource = doc.data() as FireStoreResource;
-  switch (data.type) {
-    case "s3Folder":
-      // tslint:disable-next-line: no-use-before-declare
-      return new S3ResourceObject(doc.id, data);
-
-    case "iotOrganization":
-      // tslint:disable-next-line: no-use-before-declare
-      return new IotResourceObject(doc.id, data);
-  }
+  const constructor = resourceTypeObjects[data.type];
+  // tslint:disable-next-line: no-use-before-declare
+  return new constructor(doc.id, data);
 }
 
 export const findResource = (db: FirebaseFirestore.Firestore, env: string, id: string) => {
@@ -130,8 +132,7 @@ export const createResource = (db: FirebaseFirestore.Firestore, env: string, cla
           return;
         }
 
-        // FIXME: centralize this list of types, it is also used in fromDocumentSnapshot
-        if (type !== "s3Folder" && type !== "iotOrganization") {
+        if (!resourceTypes.includes(type)) {
           reject(`Unknown resource type: ${type}`);
           return;
         }

@@ -9,10 +9,8 @@ const config = {
   aws: {
     key: "test-aws-key",
     secret: "test-aws-secret",
-    s3credentials: {
-      rolearn: "test-rolearn",
-      duration: 3600
-    }
+    rolearn: "test-rolearn",
+    duration: 3600
   }
 };
 
@@ -182,7 +180,5 @@ describe("Resource", () => {
         expect(createBaseResource(validReadWriteTokenRules).isReadWriteTokenValid(validReadWriteToken2)).toEqual(true);
       });
     });
-
-    // TODO: add tests for static Firestore member functions
   });
 });
