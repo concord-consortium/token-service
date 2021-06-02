@@ -23,10 +23,8 @@ firebaseFunctionsEnv.mockConfig({
     public_key: testPublicKey
   },
   aws: {
-    s3credentials: {
-      duration: "3600",
-      rolearn: "test-role"
-    },
+    duration: "3600",
+    rolearn: "test-role"
     secret: "aws-secret",
     key: "aws-key"
   }
