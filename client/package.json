@@ -1,11 +1,12 @@
 {
   "name": "@concord-consortium/token-service",
-  "version": "1.3.0",
+  "version": "2.0.0-pre.1",
   "description": "Provides a CRUD api to create resources and an api endpoint to generate AWS credentials from those resources.",
   "main": "lib/client/src/client.js",
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "tsc"
+    "prepublishOnly": "tsc",
+    "publish:beta": "npm publish --tag beta --access public"
   },
   "repository": {
     "type": "git",
