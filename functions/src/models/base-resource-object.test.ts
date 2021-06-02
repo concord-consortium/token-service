@@ -180,7 +180,5 @@ describe("Resource", () => {
         expect(createBaseResource(validReadWriteTokenRules).isReadWriteTokenValid(validReadWriteToken2)).toEqual(true);
       });
     });
-
-    // TODO: add tests for static Firestore member functions
   });
 });

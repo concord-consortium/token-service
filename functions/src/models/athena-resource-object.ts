@@ -20,9 +20,8 @@ export class AthenaResourceObject extends BaseResourceObject {
   }
 
   createKeys(config: Config, _settings: FireStoreResourceSettings) {
-    // Cast settings to desired type. We can't change argument type due to the way how the logic and typing is
-    // organized in resource classes. TODO: refactor all that, base class is referencing its subclasses often,
-    // causing circular dependencies and issues like this one.
+    // TODO: see if we can change the argument type instead of casting, this will force
+    // either a cast or type guard before this method is called
     const settings = _settings as FireStoreAthenaWorkgroupSettings;
     const workgroupName = this.workgroupName();
     const keyPrefix = `${settings.folder}/${workgroupName}/`
@@ -69,9 +68,8 @@ export class AthenaResourceObject extends BaseResourceObject {
   }
 
   apiResult(claims: AuthClaims | undefined, _settings: FireStoreResourceSettings): AthenaResource {
-    // Cast settings to desired type. We can't change argument type due to the way how the logic and typing is
-    // organized in resource classes. TODO: refactor all that, base class is referencing its subclasses often,
-    // causing circular dependencies and issues like this one.
+    // TODO: see if we can change the argument type instead of casting, this will force
+    // either a cast or type guard before this method is called
     const settings = _settings as FireStoreAthenaWorkgroupSettings;
     const result = super.apiResult(claims) as AthenaResource;
     result.region = settings.region;

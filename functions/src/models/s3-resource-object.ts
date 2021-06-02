@@ -27,9 +27,8 @@ export class S3ResourceObject extends BaseResourceObject {
   }
 
   apiResult(claims: AuthClaims | undefined, settings: FireStoreResourceSettings): S3Resource {
-    // Cast settings to desired type. We can't change argument type due to the way how the logic and typing is
-    // organized in resource classes. TODO: refactor all that, base class is referencing its subclasses often,
-    // causing circular dependencies and issues like this one.
+    // TODO: see if we can change the argument type instead of casting, this will force
+    // either a cast or type guard before this method is called
     const s3settings = settings as FireStoreS3ResourceSettings;
     const result = super.apiResult(claims) as S3Resource;
     result.bucket = s3settings.bucket;
@@ -51,9 +50,8 @@ export class S3ResourceObject extends BaseResourceObject {
   }
 
   createKeys(config: Config, settings: FireStoreResourceSettings) {
-    // Cast settings to desired type. We can't change argument type due to the way how the logic and typing is
-    // organized in resource classes. TODO: refactor all that, base class is referencing its subclasses often,
-    // causing circular dependencies and issues like this one.
+    // TODO: see if we can change the argument type instead of casting, this will force
+    // either a cast or type guard before this method is called
     const s3settings = settings as FireStoreS3ResourceSettings;
     const { id } = this;
     const keyPrefix = `${s3settings.folder}/${id}/`
