@@ -75,21 +75,18 @@ const getValidatedConfig = () => {
   if (!config.aws.secret) {
     throw new Error("Missing aws.secret in config!");
   }
-  if (!config.aws.s3credentials) {
-    throw new Error("Missing aws.s3credentials object in config!");
+  if (!config.aws.rolearn) {
+    throw new Error("Missing aws.rolearn in config!");
   }
-  if (!config.aws.s3credentials.rolearn) {
-    throw new Error("Missing aws.s3credentials.rolearn in config!");
-  }
-  if (!config.aws.s3credentials.duration) {
-    throw new Error("Missing aws.s3credentials.duration in config!");
+  if (!config.aws.duration) {
+    throw new Error("Missing aws.duration in config!");
   }
   // configs are stored as strings but we want duration as a number
-  const duration = parseInt(config.aws.s3credentials.duration as unknown as string, 10);
+  const duration = parseInt(config.aws.duration as unknown as string, 10);
   if (isNaN(duration)) {
-    throw new Error("aws.s3credentials.duration is not convertable to an integer!");
+    throw new Error("aws.duration is not convertable to an integer!");
   }
-  config.aws.s3credentials.duration = duration;
+  config.aws.duration = duration;
   return config;
 };
 

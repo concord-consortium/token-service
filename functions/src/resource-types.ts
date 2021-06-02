@@ -9,11 +9,8 @@ export interface Config {
   aws: {
     key: string;
     secret: string;
-    // FIXME: These settings are used not just for S3 but also Athena
-    s3credentials: {
-      rolearn: string;
-      duration: number;
-    }
+    rolearn: string;
+    duration: number;
   }
 }
 

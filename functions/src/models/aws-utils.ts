@@ -22,12 +22,10 @@ export const assumeAWSRole = (policy: string, region: string, sessionName: strin
       roleSessionName = `token-service-${md5Hash}`;
     }
     const params: STS.AssumeRoleRequest = {
-      // FIXME: the rolearn and duration should be moved to the top level aws part of the config
-      //   they will be used for all AWS not just S3.
-      DurationSeconds: config.aws.s3credentials.duration,
+      DurationSeconds: config.aws.duration,
       // ExternalId: // not needed
       Policy: policy,
-      RoleArn: config.aws.s3credentials.rolearn,
+      RoleArn: config.aws.rolearn,
       RoleSessionName: roleSessionName
     };
     sts.assumeRole(params, (err, data) => {

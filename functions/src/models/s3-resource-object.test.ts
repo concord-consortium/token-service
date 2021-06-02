@@ -12,10 +12,8 @@ const config = {
   aws: {
     key: "test-aws-key",
     secret: "test-aws-secret",
-    s3credentials: {
-      rolearn: "test-rolearn",
-      duration: 3600
-    }
+    rolearn: "test-rolearn",
+    duration: 3600
   }
 };
 
