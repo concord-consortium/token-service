@@ -154,9 +154,7 @@ describe("Resource", () => {
       const keys = await createS3Resource().createKeys(config, {bucket: "test-bucket", folder: "test-folder", region: "test-region"} as FireStoreS3ResourceSettings);
       expect(keys).toEqual({
         accessKeyId: fakeAwsCredentials.AccessKeyId,
-        bucket: "test-bucket",
         expiration: fakeAwsCredentials.Expiration,
-        keyPrefix: "test-folder/test/",
         secretAccessKey: fakeAwsCredentials.SecretAccessKey,
         sessionToken: fakeAwsCredentials.SessionToken
       });
@@ -168,9 +166,7 @@ describe("Resource", () => {
       const keys = await resource.createKeys(config, {bucket: "test-bucket", folder: "test-folder", region: "test-region"} as FireStoreS3ResourceSettings);
       expect(keys).toEqual({
         accessKeyId: fakeAwsCredentials.AccessKeyId,
-        bucket: "test-bucket",
         expiration: fakeAwsCredentials.Expiration,
-        keyPrefix: "test-folder/test/",
         secretAccessKey: fakeAwsCredentials.SecretAccessKey,
         sessionToken: fakeAwsCredentials.SessionToken
       });

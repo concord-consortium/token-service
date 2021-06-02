@@ -651,8 +651,6 @@ describe("token-service app", () => {
         .expect(200);
       const json = checkResponse(response);
       expect(json.result).toEqual({
-        bucket: "test-bucket",
-        keyPrefix: `test-folder/${resource.id}/`,
         accessKeyId: fakeAwsCredentials.AccessKeyId,
         secretAccessKey: fakeAwsCredentials.SecretAccessKey,
         sessionToken: fakeAwsCredentials.SessionToken,
@@ -672,8 +670,6 @@ describe("token-service app", () => {
         .expect(200);
       const json = checkResponse(response);
       expect(json.result).toEqual({
-        bucket: "test-bucket",
-        keyPrefix: `test-folder/${resource.id}/`,
         accessKeyId: fakeAwsCredentials.AccessKeyId,
         secretAccessKey: fakeAwsCredentials.SecretAccessKey,
         sessionToken: fakeAwsCredentials.SessionToken,
@@ -705,8 +701,6 @@ describe("token-service app", () => {
         .expect(200);
       const json = checkResponse(response);
       expect(json.result).toEqual({
-        bucket: "test-bucket",
-        keyPrefix: `test-folder/${resource.id}/`,
         accessKeyId: fakeAwsCredentials.AccessKeyId,
         secretAccessKey: fakeAwsCredentials.SecretAccessKey,
         sessionToken: fakeAwsCredentials.SessionToken,

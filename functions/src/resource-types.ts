@@ -61,12 +61,6 @@ export interface Credentials {
   expiration: Date;
   secretAccessKey: string;
   sessionToken: string;
-  // FIXME: S3 properties are included in the Credentials for S3Resources,
-  //  this seems unnecessary since the Resource used to fetch the credentials also
-  //  has the bucket, it doesn't have the keyPrefix, but we could add it.  This
-  //  Credentials object is used for non S3 Resources too.
-  bucket?: string;
-  keyPrefix?: string;
 }
 
 export type ResourceType = "s3Folder" | "iotOrganization" | "athenaWorkgroup";

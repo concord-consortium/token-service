@@ -4,7 +4,7 @@ import {
 } from "../firestore-types";
 import {BaseResourceObject} from "./base-resource-object";
 import {
-  Credentials, Config, S3Resource
+  Config, S3Resource
 } from "../resource-types";
 import { assumeAWSRole } from "./aws-utils"
 
@@ -89,14 +89,6 @@ export class S3ResourceObject extends BaseResourceObject {
       ]
     });
 
-    return assumeAWSRole(policy, s3settings.region, `${this.type}-${this.tool}-${this.id}`, config)
-      .then(credentials => {
-        const s3Credentials: Credentials = { 
-          ...credentials,
-          bucket: s3settings.bucket,
-          keyPrefix
-        };
-        return s3Credentials;
-      });
+    return assumeAWSRole(policy, s3settings.region, `${this.type}-${this.tool}-${this.id}`, config);
   }
 }
