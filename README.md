@@ -66,7 +66,7 @@ The entry should look like this:
 
 ```javascript
   bucket: "token-service-files",
-  folder: "example-app",   // good idea to match `tool` below.
+  folder: "example-app",
   region: "us-east-1",
   tool: "example-app",
   type: "athenaWorkgroup",
