@@ -10,6 +10,12 @@ export interface TokenServiceClientOptions {
   serviceUrl?: string;
 }
 
+// for use as a node library. `fetch` must be isomorphic with `window.fetch`: `node-fetch` can be used
+export interface TokenServiceClientNodeOptions extends TokenServiceClientOptions {
+  env: EnvironmentName;
+  fetch: (input: RequestInfo, init?: RequestInit | undefined) => Promise<Response>;
+}
+
 const serviceUrls: {[k in EnvironmentName]: string} = {
   dev: "http://localhost:5000/api/v1/resources",
   staging: "https://token-service-staging.firebaseapp.com/api/v1/resources",
@@ -17,6 +23,9 @@ const serviceUrls: {[k in EnvironmentName]: string} = {
 };
 
 const getEnv = (): EnvironmentName => {
+  if (typeof window === "undefined") {
+    throw new Error("env must be set in options when running as node library");
+  }
   const {host} = window.location;
   if (host.match(/staging\./)) {
     return "staging";
@@ -32,6 +41,9 @@ const getServiceUrlFromEnv = (env: EnvironmentName) => {
 };
 
 const getServiceUrlFromQueryString = () => {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
   const query = window.location.search.substring(1);
   const vars = query.split('&');
   // tslint:disable-next-line:prefer-for-of
@@ -50,12 +62,14 @@ export class TokenServiceClient {
   public readonly jwt: string | undefined;
   public readonly env: EnvironmentName;
   public readonly serviceUrl: string;
+  public readonly fetch: (input: RequestInfo, init?: RequestInit | undefined) => Promise<Response>;
 
-  constructor (options: TokenServiceClientOptions) {
+  constructor (options: TokenServiceClientOptions | TokenServiceClientNodeOptions) {
     const {jwt, serviceUrl} = options;
     this.jwt = jwt;
     this.env = options.env || getEnv();
     this.serviceUrl = getServiceUrlFromQueryString() || serviceUrl || getServiceUrlFromEnv(this.env) || serviceUrls.production;
+    this.fetch = ("fetch" in options) ? options.fetch : fetch;
   }
 
   static get FirebaseAppName() {
@@ -64,7 +78,7 @@ export class TokenServiceClient {
 
   listResources(options: FindAllQuery) {
     return new Promise<Resource[]>((resolve, reject) => {
-      return this.fetch("GET", this.url("/", options))
+      return this.fetchFromServiceUrl("GET", this.url("/", options))
         .then(resolve)
         .catch(reject)
     })
@@ -72,7 +86,7 @@ export class TokenServiceClient {
 
   getResource(resourceId: string) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("GET", this.url(`/${resourceId}`))
+      return this.fetchFromServiceUrl("GET", this.url(`/${resourceId}`))
         .then(resolve)
         .catch(reject)
     })
@@ -80,7 +94,7 @@ export class TokenServiceClient {
 
   createResource(options: CreateQuery) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("POST", this.url("/"), { body: options })
+      return this.fetchFromServiceUrl("POST", this.url("/"), { body: options })
         .then(resolve)
         .catch(reject)
     })
@@ -88,7 +102,7 @@ export class TokenServiceClient {
 
   updateResource(resourceId: string, options: UpdateQuery) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("PATCH", this.url(`/${resourceId}`), { body: options })
+      return this.fetchFromServiceUrl("PATCH", this.url(`/${resourceId}`), { body: options })
         .then(resolve)
         .catch(reject)
     })
@@ -97,7 +111,7 @@ export class TokenServiceClient {
   // TODO: NB: This only deletes firestore record of the resource …
   deleteResource(resourceId: string) {
     return new Promise<Resource>((resolve, reject) => {
-      return this.fetch("DELETE", this.url(`/${resourceId}`))
+      return this.fetchFromServiceUrl("DELETE", this.url(`/${resourceId}`))
         .then(resolve)
         .catch(reject)
     })
@@ -105,7 +119,7 @@ export class TokenServiceClient {
 
   getCredentials(resourceId: string, readWriteToken?: string) {
     return new Promise<Credentials>((resolve, reject) => {
-      return this.fetch("POST", this.url(`/${resourceId}/credentials`), { readWriteToken })
+      return this.fetchFromServiceUrl("POST", this.url(`/${resourceId}/credentials`), { readWriteToken })
         .then(resolve)
         .catch(reject)
     })
@@ -133,23 +147,23 @@ export class TokenServiceClient {
     return `${root}?${keyValues}`;
   }
 
-  private fetch(method: string, path: string, options?: { body?: any, readWriteToken?: string }) {
+  private fetchFromServiceUrl(method: string, path: string, options?: { body?: any, readWriteToken?: string }) {
     return new Promise<any>((resolve, reject) => {
       const url = `${this.serviceUrl}${path}`;
       const requestOptions: RequestInit = {
         method,
-        headers: new Headers({
+        headers: {
           "Content-Type": "application/json"
-        })
+        }
       };
       const authToken = options?.readWriteToken || this.jwt;
       if (authToken) {
-        (requestOptions.headers as Headers).set("Authorization", `Bearer ${authToken}`);
+        (requestOptions.headers as any)["Authorization"] = `Bearer ${authToken}`;
       }
       if (options?.body) {
         requestOptions.body = JSON.stringify(options.body);
       }
-      return fetch(url, requestOptions)
+      return this.fetch(url, requestOptions)
         .then((resp) => resp.json())
         .then((json) => {
           if (json.status === "success") {
