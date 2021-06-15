@@ -70,6 +70,9 @@ export class TokenServiceClient {
     this.env = options.env || getEnv();
     this.serviceUrl = getServiceUrlFromQueryString() || serviceUrl || getServiceUrlFromEnv(this.env) || serviceUrls.production;
     this.fetch = ("fetch" in options) ? options.fetch : fetch;
+    if (!this.fetch) {
+      throw new Error("fetch not found in options or window object");
+    }
   }
 
   static get FirebaseAppName() {
