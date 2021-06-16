@@ -62,16 +62,18 @@ export class TokenServiceClient {
   public readonly jwt: string | undefined;
   public readonly env: EnvironmentName;
   public readonly serviceUrl: string;
-  public readonly fetch: (input: RequestInfo, init?: RequestInit | undefined) => Promise<Response>;
+  public readonly fetch?: (input: RequestInfo, init?: RequestInit | undefined) => Promise<Response>;
 
   constructor (options: TokenServiceClientOptions | TokenServiceClientNodeOptions) {
     const {jwt, serviceUrl} = options;
     this.jwt = jwt;
     this.env = options.env || getEnv();
     this.serviceUrl = getServiceUrlFromQueryString() || serviceUrl || getServiceUrlFromEnv(this.env) || serviceUrls.production;
-    this.fetch = ("fetch" in options) ? options.fetch : fetch;
-    if (!this.fetch) {
-      throw new Error("fetch not found in options or window object");
+    if ("fetch" in options) {
+      this.fetch = options.fetch;
+    }
+    if (typeof window === "undefined" && !this.fetch) {
+      throw new Error("fetch must be set in options when running as node library");
     }
   }
 
@@ -166,7 +168,7 @@ export class TokenServiceClient {
       if (options?.body) {
         requestOptions.body = JSON.stringify(options.body);
       }
-      return this.fetch(url, requestOptions)
+      return (this.fetch || fetch)(url, requestOptions)
         .then((resp) => resp.json())
         .then((json) => {
           if (json.status === "success") {
