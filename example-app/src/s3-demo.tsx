@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Section, useInput } from "./form";
 import { S3Resource, Credentials } from "@concord-consortium/token-service";
 import { uploadS3File, deleteS3File, listS3Files, SIGNED_URL_EXPIRES, IListResult } from "./s3-helpers";
@@ -17,6 +17,13 @@ export const S3Demo : React.FunctionComponent<S3DemoProps> = props => {
   const [files, setFiles] = useState<IListResult[] | undefined>();
 
   const {credentials, s3Resource, showSignedUrl} = props;
+
+  useEffect(() => {
+    // Reset state when resource changes.
+    setFiles(undefined);
+    setFilePublicUrl("");
+    setFileSignedUrl("");
+  }, [s3Resource]);
 
   const handleCreateOrUpdateS3File = async () => {
     if (!credentials || !s3Resource) return;

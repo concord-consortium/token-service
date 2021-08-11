@@ -37,6 +37,14 @@ const AppComponent = () => {
     setPortalAccessToken(helpers.readPortalAccessToken());
   }, []);
 
+  useEffect(() => {
+    // Reset state related to the main params.
+    setResources({});
+    setResourcesStatus("use button to load list");
+    setCurrentResource(undefined);
+    setCredentials(undefined);
+  }, [rawTool, rawTokenServiceEnv, resourceType]);
+
   const handleAuthorizeInPortal = () => {
     helpers.authorizeInPortal(portalUrl, oauthClientName);
   };
