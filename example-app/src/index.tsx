@@ -16,6 +16,7 @@ const AppComponent = () => {
   const [firebaseAppName, firebaseAppNameProps] = useLocalStorageInput("firebaseApp", "token-service");
   const [firebaseJwt, firebaseJwtProps, setFirebaseJwt] = useLocalStorageInput("firebaseJwt", "");
   const [resourceType, resourceTypeProps] = useLocalStorageInput("resourceType", "s3Folder");
+  const [rawTool, toolProps] = useLocalStorageInput("tool", "example-app");
 
   const [createResourceName, createResourceNameProps] = useInput("test-resource");
   const [createResourceDescription, createResourceDescriptionProps] = useInput("created by example-app");
@@ -29,6 +30,8 @@ const AppComponent = () => {
 
   // Limit the enviornment to dev or staging
   const tokenServiceEnv = ["dev","staging"].includes(rawTokenServiceEnv) ? rawTokenServiceEnv as EnvironmentName : "staging";
+  // Limit the tool to example-app or example-app-private
+  const tool = ["example-app", "example-app-private"].includes(rawTool) ? rawTool as helpers.SupportedTool : "example-app";
 
   useEffect(() => {
     setPortalAccessToken(helpers.readPortalAccessToken());
@@ -44,6 +47,7 @@ const AppComponent = () => {
 
   const createResource = async (authenticated: boolean) => {
     const resource = await helpers.createResource({
+      tool,
       resourceType: resourceType as ResourceType, // TODO Hacky
       resourceName: createResourceName,
       resourceDescription: createResourceDescription,
@@ -70,7 +74,7 @@ const AppComponent = () => {
     // Clear existing resources
     setResources({} as ResourceMap);
     setResourcesStatus("loading...");
-    const resourceList = await helpers.listResources(firebaseJwt, true, tokenServiceEnv, resourceType as ResourceType);
+    const resourceList = await helpers.listResources(tool, firebaseJwt, true, tokenServiceEnv, resourceType as ResourceType);
     if(resourceList.length === 0) {
       setResourcesStatus("no resources found");
     } else {
@@ -113,7 +117,7 @@ const AppComponent = () => {
   };
 
   const handleLogAllResources = () => {
-    helpers.logAllResources(firebaseJwt, tokenServiceEnv);
+    helpers.logAllResources(tool, firebaseJwt, tokenServiceEnv);
   };
 
   return (
@@ -126,6 +130,14 @@ const AppComponent = () => {
         <p className="hint">
           "dev" or "staging". Note that "dev" requires running local server at localhost:5000, see: <a target="_blank" href="https://github.com/concord-consortium/token-service#development-setup">https://github.com/concord-consortium/token-service#development-setup</a><br/>
           If you use "staging", you should see a new entry in this collection each time you upload a file: <a target="_blank" href="https://console.firebase.google.com/project/token-service-staging/database/firestore/data~2Fstaging:resources">https://console.firebase.google.com/project/token-service-staging/database/firestore/data~2Fstaging:resources</a>
+        </p>
+        <p>Tool: <select {...toolProps} >
+          <option value="example-app">example-app</option>
+          <option value="example-app-private">example-app-private</option>
+        </select></p>
+        <p className="hint">
+          "example-app-private" uses an S3 bucket that does NOT allow public access. The only way to access the uploaded
+          file is to use a signed URL.
         </p>
         <p>Resource Type: <select {...resourceTypeProps} >
           <option value="s3Folder">s3Folder</option>
@@ -187,7 +199,7 @@ const AppComponent = () => {
 
       <Section title="Current Resource">
         { currentResource ?
-            // It'd be mice for this to just show the name and be able to expand to show the full resource
+            // It'd be nice for this to just show the name and be able to expand to show the full resource
             <pre>{JSON.stringify(currentResource,null, 2)}</pre>
           :
             <p>no resource selected</p>
@@ -197,7 +209,7 @@ const AppComponent = () => {
           files, objects or other items associated with the resource in AWS</p>
         <p><button onClick={handleGetCredentials} disabled={!currentResource}>Get Credentials</button></p>
         { credentials ?
-          // It'd be mice for this to just show the name and be able to expand to show the full resource
+          // It'd be nice for this to just show the name and be able to expand to show the full resource
           <pre>{JSON.stringify(credentials,null, 2)}</pre>
         :
           <p>request credentials for this resource</p>
@@ -205,7 +217,7 @@ const AppComponent = () => {
       </Section>
 
       { resourceType === "s3Folder" &&
-        <S3Demo credentials={credentials} s3Resource={currentResource as S3Resource} />
+        <S3Demo credentials={credentials} s3Resource={currentResource as S3Resource} showSignedUrl={tool === "example-app-private"} />
       }
 
       { resourceType === "athenaWorkgroup" &&
