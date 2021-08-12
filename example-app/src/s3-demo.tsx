@@ -1,26 +1,35 @@
-import React, { useState } from "react";
-import * as helpers from "./helpers";
+import React, { useEffect, useState } from "react";
 import { Section, useInput } from "./form";
-import { S3Resource, EnvironmentName, ResourceType, Credentials } from "@concord-consortium/token-service";
-import { uploadS3File, deleteS3File, listS3Files } from "./s3-helpers";
+import { S3Resource, Credentials } from "@concord-consortium/token-service";
+import { uploadS3File, deleteS3File, listS3Files, SIGNED_URL_EXPIRES, IListResult } from "./s3-helpers";
 
 interface S3DemoProps {
   credentials?: Credentials;
   s3Resource?: S3Resource;
+  showSignedUrl?: boolean;
 }
 
 export const S3Demo : React.FunctionComponent<S3DemoProps> = props => {
   const [filename, filenameProps] = useInput("test.txt");
   const [fileContent, fileContentProps] = useInput("Hello world");
   const [filePublicUrl, setFilePublicUrl] = useState("");
-  const [files, setFiles] = useState<string[] | undefined>();
+  const [fileSignedUrl, setFileSignedUrl] = useState("");
+  const [files, setFiles] = useState<IListResult[] | undefined>();
 
-  const {credentials, s3Resource} = props;
+  const {credentials, s3Resource, showSignedUrl} = props;
+
+  useEffect(() => {
+    // Reset state when resource changes.
+    setFiles(undefined);
+    setFilePublicUrl("");
+    setFileSignedUrl("");
+  }, [s3Resource]);
 
   const handleCreateOrUpdateS3File = async () => {
     if (!credentials || !s3Resource) return;
     const result = await uploadS3File({ filename, fileContent, s3Resource, credentials });
     setFilePublicUrl(result.publicUrl);
+    setFileSignedUrl(result.signedUrl);
   };
 
   const handleDeleteS3File = async () => {
@@ -43,7 +52,8 @@ export const S3Demo : React.FunctionComponent<S3DemoProps> = props => {
       <p>
         <button onClick={handleCreateOrUpdateS3File}>Create or Update File</button>
       </p>
-      { filePublicUrl && <a target="_blank" href={filePublicUrl}>{filePublicUrl}</a> }
+      { filePublicUrl && <div>Public URL: <a target="_blank" href={filePublicUrl}>{filePublicUrl}</a></div> }
+      { showSignedUrl && fileSignedUrl && <div>Signed URL (expires in { SIGNED_URL_EXPIRES } seconds): <a target="_blank" href={fileSignedUrl}>{fileSignedUrl.slice(0, 120)}...</a></div> }
     </Section>
 
     <Section title="Delete File">
@@ -60,7 +70,8 @@ export const S3Demo : React.FunctionComponent<S3DemoProps> = props => {
       { files ?
           <ul>
             { files.map(file =>
-              <li key={file}>{file}</li>
+              <li key={file.key}>{file.key} <a target="_blank" href={file.publicUrl}>Public URL</a> { showSignedUrl && <a target="_blank" href={file.signedUrl}>Signed URL</a> }
+              </li>
             )}
           </ul>
         :

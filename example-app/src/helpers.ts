@@ -2,6 +2,9 @@ import ClientOAuth2 from "client-oauth2";
 import { TokenServiceClient,
   EnvironmentName, ResourceType, Resource, Credentials } from "@concord-consortium/token-service";
 
+// This is specific to this app. example-app-private uses a private S3 bucket that doesn't allow public access.
+export type SupportedTool = "example-app" | "example-app-private";
+
 // This file provides simple recipes showing how to use TokenServiceClient and how to get other necessary
 // prerequisites (auth in Portal, firebase JWT).
 
@@ -40,13 +43,14 @@ export const getFirebaseJwt = (portalUrl: string, portalAccessToken: string, fir
 };
 
 interface ICreateResource {
+  tool: SupportedTool;
   resourceType: ResourceType;
   resourceName: string;
   resourceDescription: string;
   firebaseJwt?: string;
   tokenServiceEnv: EnvironmentName;
 }
-export const createResource = async ({ resourceType, resourceName, resourceDescription,
+export const createResource = async ({ tool, resourceType, resourceName, resourceDescription,
   firebaseJwt, tokenServiceEnv }: ICreateResource): Promise<Resource> => {
   // This function optionally accepts firebaseJWT. There are three things that depend on authentication method:
   // - TokenServiceClient constructor arguments. If user should be authenticated during every call to the API, provide `jwt` param.
@@ -56,7 +60,7 @@ export const createResource = async ({ resourceType, resourceName, resourceDescr
   // The client will be anonymous if firebaseJwt undefined
   const client = new TokenServiceClient({ env: tokenServiceEnv, jwt: firebaseJwt })
   return client.createResource({
-    tool: "example-app",
+    tool,
     type: resourceType,
     name: resourceName,
     description: resourceDescription,
@@ -92,18 +96,18 @@ export const getCredentials = async ({resource, firebaseJwt,
   return readWriteToken ? await client.getCredentials(resource.id, readWriteToken) :  await client.getCredentials(resource.id);
 }
 
-export const listResources = async (firebaseJwt: string, amOwner: boolean,
+export const listResources = async (tool: SupportedTool, firebaseJwt: string, amOwner: boolean,
   tokenServiceEnv: EnvironmentName, resourceType: ResourceType) => {
   const client = new TokenServiceClient({ jwt: firebaseJwt, env: tokenServiceEnv });
   return client.listResources({
+    tool,
     type: resourceType,
-    tool: "example-app",
     amOwner: amOwner ? "true" : "false"
   });
 };
 
-export const logAllResources = async (firebaseJwt: string,
+export const logAllResources = async (tool: SupportedTool, firebaseJwt: string,
   tokenServiceEnv: EnvironmentName, resourceType: ResourceType = "s3Folder") => {
-  const resources = await listResources(firebaseJwt, false, tokenServiceEnv, resourceType);
+  const resources = await listResources(tool, firebaseJwt, false, tokenServiceEnv, resourceType);
   console.log(resources);
 };
