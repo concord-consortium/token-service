@@ -60,7 +60,7 @@ export interface JWTClaims {
   platform_user_id: string;
   platform_id: string | number;
   user_id: string | number;
-  context_id?: string;
+  class_hash?: string;
 }
 
 export interface ReadWriteTokenClaims {

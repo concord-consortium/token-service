@@ -6,7 +6,7 @@ import * as fs from "fs";
 import * as jwt from "jsonwebtoken";
 import * as supertest from "supertest";
 import { FireStoreS3Resource, FireStoreS3ResourceSettings, FireStoreIotOrganizationResource } from "./firestore-types";
-import { CreateQuery, ReadWriteTokenPrefix, UpdateQuery, UserAccessRule, AccessRuleType } from "./resource-types";
+import { CreateQuery, ReadWriteTokenPrefix, UpdateQuery, UserAccessRule, AccessRuleType, ContextAccessRule } from "./resource-types";
 import { S3ResourceObject } from "./models/s3-resource-object";
 import { fakeAwsCredentials } from "./__mocks__/aws-sdk";
 // This is necessary automatically setup config for test environment.
@@ -68,7 +68,7 @@ const s3Settings: FireStoreS3ResourceSettings = {
   bucket: "test-bucket",
   region: "test-region",
   folder: "test-folder",
-  allowedAccessRuleTypes: ["user", "readWriteToken"]
+  allowedAccessRuleTypes: ["user", "readWriteToken", "context"]
 };
 
 const readWriteToken = ReadWriteTokenPrefix + "123xyz";
@@ -90,7 +90,7 @@ const jwtClaims = {
   user_id: user.userId,
   platform_user_id: user.userId,
   platform_id: user.platformId,
-  context_id: user.contextId
+  class_hash: user.contextId
 };
 
 const jwtToken = jwt.sign({ claims: jwtClaims }, testPrivKey, { algorithm: "RS256" });
@@ -465,6 +465,80 @@ describe("token-service app", () => {
       expect(await getResourcesCount()).toEqual(1);
     });
 
+    it("creates a new resource with 'user' and 'context` access role type if user is authenticated (JWT)", async () => {
+      const settings = await createS3Settings();
+      const createQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+        description: "desc"
+      };
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .send(Object.assign({}, createQuery, {accessRuleType: ["user", "context"]}) as CreateQuery)
+        .expect(201);
+
+      const json = checkResponse(response);
+      const id = json.result.id;
+      expect(id).toEqual(expect.any(String));
+      expect(json.result).toEqual(expect.objectContaining({
+        id,
+        name: createQuery.name,
+        description: createQuery.description,
+        publicPath: `test-folder/${id}/`,
+        publicUrl: `https://test-bucket.s3.amazonaws.com/test-folder/${id}/`,
+        bucket: settings.bucket,
+        folder: settings.folder,
+        region: settings.region,
+        tool: settings.tool,
+        type: settings.type
+      }));
+      expect(json.result.accessRules.length).toEqual(2);
+      expect(json.result.accessRules[0]).toEqual({ type: "user", role: "owner", userId: user.userId, platformId: user.platformId } as UserAccessRule);
+      expect(json.result.accessRules[1]).toEqual({ type: "context", platformId: user.platformId, contextId: user.contextId } as ContextAccessRule);
+
+      expect(await getResourcesCount()).toEqual(1);
+    });
+
+    it("automatically adds 'user' access role type if user is authenticated and specified only 'context' access rule (JWT)", async () => {
+      const settings = await createS3Settings();
+      const createQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+        description: "desc"
+      };
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .send(Object.assign({}, createQuery, {accessRuleType: "context"}) as CreateQuery)
+        .expect(201);
+
+      const json = checkResponse(response);
+      const id = json.result.id;
+      expect(id).toEqual(expect.any(String));
+      expect(json.result).toEqual(expect.objectContaining({
+        id,
+        name: createQuery.name,
+        description: createQuery.description,
+        publicPath: `test-folder/${id}/`,
+        publicUrl: `https://test-bucket.s3.amazonaws.com/test-folder/${id}/`,
+        bucket: settings.bucket,
+        folder: settings.folder,
+        region: settings.region,
+        tool: settings.tool,
+        type: settings.type
+      }));
+      expect(json.result.accessRules.length).toEqual(2);
+      expect(json.result.accessRules[0]).toEqual({ type: "user", role: "owner", userId: user.userId, platformId: user.platformId } as UserAccessRule);
+      expect(json.result.accessRules[1]).toEqual({ type: "context", platformId: user.platformId, contextId: user.contextId } as ContextAccessRule);
+
+      expect(await getResourcesCount()).toEqual(1);
+    });
+
     it("returns an error if the resource is missing fields.", async () => {
       const settings = await createS3Settings();
 
@@ -592,6 +666,22 @@ describe("token-service app", () => {
       expect(await getFirstResource()).not.toEqual(expect.objectContaining(updateQuery));
     });
 
+    it("fails if user is only a class/context member", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource({
+        accessRules: [{ type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule]
+      });
+      const updateQuery: UpdateQuery = { description: "new description" };
+      const response = await supertest(webApiV1)
+        .patch("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .send(updateQuery)
+        .query({ env: "dev" })
+        .expect(400);
+      expect(response.text).toContain("You do not have permission");
+      expect(await getFirstResource()).not.toEqual(expect.objectContaining(updateQuery));
+    });
+
     it("updates resource if user is an owner", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
@@ -677,7 +767,26 @@ describe("token-service app", () => {
       });
     });
 
-    it("returns an error when user is not owner or member(JWT)", async () => {
+    it("returns credentials when user is a class/context member (JWT)", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource({
+        accessRules: [{ type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule]
+      });
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(200);
+      const json = checkResponse(response);
+      expect(json.result).toEqual({
+        accessKeyId: fakeAwsCredentials.AccessKeyId,
+        secretAccessKey: fakeAwsCredentials.SecretAccessKey,
+        sessionToken: fakeAwsCredentials.SessionToken,
+        expiration: fakeAwsCredentials.Expiration
+      });
+    });
+
+    it("returns an error when user is not owner or member (JWT)", async () => {
       await createS3Settings();
       const resource = await createS3Resource({
         accessRules: []
@@ -737,6 +846,20 @@ describe("token-service app", () => {
       await createS3Settings();
       const resource = await createS3Resource({
         accessRules: [{ type: "user", role: "member", userId: user.userId, platformId: user.platformId } as UserAccessRule]
+      });
+      const response = await supertest(webApiV1)
+        .delete("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(400);
+      expect(response.text).toContain("You do not have permission to delete resource");
+      expect(await getResourcesCount()).toEqual(1);
+    });
+
+    it("fails if user is only a class/context member", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource({
+        accessRules: [{ type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule]
       });
       const response = await supertest(webApiV1)
         .delete("/api/v1/resources/" + resource.id)
