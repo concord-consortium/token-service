@@ -114,7 +114,8 @@ const validClaims: JWTClaims = {
 };
 const validClaimsWithTargetUserId: JWTClaims = {
   platform_id: "test-platform-id",
-  platform_user_id: "researcher",
+  platform_user_id: "researcher-1",
+  user_id: "researcher-1",
   target_user_id: "test-user-id",
   class_hash: "test-context-id"
 };
