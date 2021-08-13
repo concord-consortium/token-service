@@ -81,6 +81,7 @@ const s3Resource: FireStoreS3Resource = {
   description: "test-description",
   accessRules: [
     {type: "user", role: "owner", platformId: user.platformId, userId: user.userId},
+    {type: "context", platformId: user.platformId, contextId: user.contextId},
     {type: "readWriteToken", readWriteToken}
   ],
   name: "test.txt"
@@ -431,17 +432,18 @@ describe("token-service app", () => {
 
     it("creates a new resource with 'user' access role type if user is authenticated (JWT)", async () => {
       const settings = await createS3Settings();
-      const createQuery = {
+      const createQuery: CreateQuery = {
         type: settings.type,
         tool: settings.tool,
         name: "test.txt",
-        description: "desc"
+        description: "desc",
+        accessRuleType: "user"
       };
       const response = await supertest(webApiV1)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
-        .send(Object.assign({}, createQuery, {accessRuleType: "user"}) as CreateQuery)
+        .send(createQuery)
         .expect(201);
 
       const json = checkResponse(response);
@@ -467,17 +469,18 @@ describe("token-service app", () => {
 
     it("creates a new resource with 'user' and 'context` access role type if user is authenticated (JWT)", async () => {
       const settings = await createS3Settings();
-      const createQuery = {
+      const createQuery: CreateQuery = {
         type: settings.type,
         tool: settings.tool,
         name: "test.txt",
-        description: "desc"
+        description: "desc",
+        accessRuleType: ["user", "context"]
       };
       const response = await supertest(webApiV1)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
-        .send(Object.assign({}, createQuery, {accessRuleType: ["user", "context"]}) as CreateQuery)
+        .send(createQuery)
         .expect(201);
 
       const json = checkResponse(response);
@@ -504,17 +507,18 @@ describe("token-service app", () => {
 
     it("automatically adds 'user' access role type if user is authenticated and specified only 'context' access rule (JWT)", async () => {
       const settings = await createS3Settings();
-      const createQuery = {
+      const createQuery: CreateQuery = {
         type: settings.type,
         tool: settings.tool,
         name: "test.txt",
-        description: "desc"
+        description: "desc",
+        accessRuleType: "context"
       };
       const response = await supertest(webApiV1)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
-        .send(Object.assign({}, createQuery, {accessRuleType: "context"}) as CreateQuery)
+        .send(createQuery)
         .expect(201);
 
       const json = checkResponse(response);
@@ -547,12 +551,34 @@ describe("token-service app", () => {
         type: settings.type,
         tool: settings.tool,
         name: "test.txt",
+        accessRuleType: "user"
       };
       const response = await supertest(webApiV1)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
-        .send(Object.assign({}, createQuery, {accessRuleType: "user"}) as CreateQuery)
+        .send(createQuery)
+        .expect(400);
+
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual("One or more missing resource fields!");
+    });
+
+    it("returns an error if create query doesn't include access rule type", async () => {
+      const settings = await createS3Settings();
+
+      // query without accessRuleType
+      const createQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+        description: "desc",
+      };
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .send(createQuery)
         .expect(400);
 
       const json = checkResponse(response, "error");
@@ -669,7 +695,10 @@ describe("token-service app", () => {
     it("fails if user is only a class/context member", async () => {
       await createS3Settings();
       const resource = await createS3Resource({
-        accessRules: [{ type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule]
+        accessRules: [
+          { type: "user", role: "owner", platformId: user.platformId, userId: "another-user-id" } as UserAccessRule,
+          { type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule
+        ]
       });
       const updateQuery: UpdateQuery = { description: "new description" };
       const response = await supertest(webApiV1)
@@ -770,7 +799,10 @@ describe("token-service app", () => {
     it("returns credentials when user is a class/context member (JWT)", async () => {
       await createS3Settings();
       const resource = await createS3Resource({
-        accessRules: [{ type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule]
+        accessRules: [
+          { type: "user", role: "owner", platformId: user.platformId, userId: "another-user-id" } as UserAccessRule,
+          { type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule
+        ]
       });
       const response = await supertest(webApiV1)
         .post("/api/v1/resources/" + resource.id + "/credentials")
@@ -859,7 +891,10 @@ describe("token-service app", () => {
     it("fails if user is only a class/context member", async () => {
       await createS3Settings();
       const resource = await createS3Resource({
-        accessRules: [{ type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule]
+        accessRules: [
+          { type: "user", role: "owner", platformId: user.platformId, userId: "another-user-id" } as UserAccessRule,
+          { type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule
+        ]
       });
       const response = await supertest(webApiV1)
         .delete("/api/v1/resources/" + resource.id)

@@ -49,6 +49,13 @@ const invalidMemberAccessRules: AccessRule[] = [
 ];
 
 const validContextAccessRules: AccessRule[] = [
+  // User access rule is not necessary, but the context rule pretty much never exists on its own
+  {
+    type: "user",
+    role: "owner",
+    platformId: "test-platform-id",
+    userId: "another-user-id"
+  },
   {
     type: "context",
     platformId: "test-platform-id",
@@ -56,6 +63,13 @@ const validContextAccessRules: AccessRule[] = [
   }
 ];
 const invalidContextAccessRules: AccessRule[] = [
+  // User access rule is not necessary, but the context rule pretty much never exists on its own
+  {
+    type: "user",
+    role: "owner",
+    platformId: "test-platform-id",
+    userId: "another-user-id"
+  },
   {
     type: "context",
     platformId: "invalid-test-platform-id",
