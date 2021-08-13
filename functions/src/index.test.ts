@@ -5,7 +5,7 @@ import * as firebaseFunctionsTest from "firebase-functions-test";
 import * as fs from "fs";
 import * as jwt from "jsonwebtoken";
 import * as supertest from "supertest";
-import { FireStoreS3Resource, FireStoreS3ResourceSettings, FireStoreIotOrganizationResource } from "./firestore-types";
+import { FireStoreS3Resource, FireStoreS3ResourceSettings, FireStoreIotOrganizationResource, JWTClaims } from "./firestore-types";
 import { CreateQuery, ReadWriteTokenPrefix, UpdateQuery, UserAccessRule, AccessRuleType, ContextAccessRule } from "./resource-types";
 import { S3ResourceObject } from "./models/s3-resource-object";
 import { fakeAwsCredentials } from "./__mocks__/aws-sdk";
@@ -87,14 +87,22 @@ const s3Resource: FireStoreS3Resource = {
   name: "test.txt"
 };
 
-const jwtClaims = {
+const jwtClaims: JWTClaims = {
   user_id: user.userId,
   platform_user_id: user.userId,
   platform_id: user.platformId,
   class_hash: user.contextId
 };
-
 const jwtToken = jwt.sign({ claims: jwtClaims }, testPrivKey, { algorithm: "RS256" });
+
+const jwtClaimsWithTargetUserId: JWTClaims = {
+  user_id: "researcher-1",
+  platform_user_id: "researcher-1",
+  platform_id: user.platformId,
+  class_hash: user.contextId,
+  target_user_id: user.userId
+};
+const jwtTokenWithTargetUserId = jwt.sign({ claims: jwtClaimsWithTargetUserId }, testPrivKey, { algorithm: "RS256" });
 
 // Parial is used here so we make invalid settings
 const createFullS3Settings = async (settings: Partial<FireStoreS3ResourceSettings>) => {
@@ -200,6 +208,52 @@ describe("token-service app", () => {
       const resource = await createS3Resource();
       const response = await supertest(webApiV1)
         .get("/api/v1/resources/" + resource.id)
+        .query({ env: "dev" })
+        .expect(200);
+
+      const json = checkResponse(response);
+      expect(json.result).toEqual(expectedResourceObject({ resource, settings, includeAccessRules: false }));
+    });
+
+    it("returns resource without sensitive data when user is only a member", async () => {
+      const settings = await createS3Settings();
+      const resource = await createS3Resource({
+        accessRules: [{ type: "user", role: "member", userId: user.userId, platformId: user.platformId } as UserAccessRule]
+      });
+      const response = await supertest(webApiV1)
+        .get("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(200);
+
+      const json = checkResponse(response);
+      expect(json.result).toEqual(expectedResourceObject({ resource, settings, includeAccessRules: false }));
+    });
+
+    it("returns resource without sensitive data when user is only a context member", async () => {
+      const settings = await createS3Settings();
+      const resource = await createS3Resource({
+        accessRules: [
+          { type: "user", role: "owner", userId: "another-user", platformId: user.platformId } as UserAccessRule,
+          { type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule
+        ]
+      });
+      const response = await supertest(webApiV1)
+        .get("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(200);
+
+      const json = checkResponse(response);
+      expect(json.result).toEqual(expectedResourceObject({ resource, settings, includeAccessRules: false }));
+    });
+
+    it("returns resource without sensitive data when user has access using target_user_id claim", async () => {
+      const settings = await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(webApiV1)
+        .get("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtTokenWithTargetUserId}`)
         .query({ env: "dev" })
         .expect(200);
 
@@ -711,6 +765,20 @@ describe("token-service app", () => {
       expect(await getFirstResource()).not.toEqual(expect.objectContaining(updateQuery));
     });
 
+    it("fails if user has access using target_user_id claim (JWT)", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const updateQuery: UpdateQuery = { description: "new description" };
+      const response = await supertest(webApiV1)
+        .patch("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtTokenWithTargetUserId}`)
+        .send(updateQuery)
+        .query({ env: "dev" })
+        .expect(400);
+      expect(response.text).toContain("You do not have permission");
+      expect(await getFirstResource()).not.toEqual(expect.objectContaining(updateQuery));
+    });
+
     it("updates resource if user is an owner", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
@@ -746,7 +814,6 @@ describe("token-service app", () => {
       const json = checkResponse(response, "error");
       expect(json.error).toEqual("Resource 1234 not found!");
     });
-
   });
 
   describe("POST api/v1/resources/:id/credentials", () => {
@@ -807,6 +874,23 @@ describe("token-service app", () => {
       const response = await supertest(webApiV1)
         .post("/api/v1/resources/" + resource.id + "/credentials")
         .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(200);
+      const json = checkResponse(response);
+      expect(json.result).toEqual({
+        accessKeyId: fakeAwsCredentials.AccessKeyId,
+        secretAccessKey: fakeAwsCredentials.SecretAccessKey,
+        sessionToken: fakeAwsCredentials.SessionToken,
+        expiration: fakeAwsCredentials.Expiration
+      });
+    });
+
+    it("returns credentials when user has access using target_user_id claim (JWT)", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(webApiV1)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtTokenWithTargetUserId}`)
         .query({ env: "dev" })
         .expect(200);
       const json = checkResponse(response);
@@ -899,6 +983,18 @@ describe("token-service app", () => {
       const response = await supertest(webApiV1)
         .delete("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(400);
+      expect(response.text).toContain("You do not have permission to delete resource");
+      expect(await getResourcesCount()).toEqual(1);
+    });
+
+    it("fails if user has access using target_user_id", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(webApiV1)
+        .delete("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtTokenWithTargetUserId}`)
         .query({ env: "dev" })
         .expect(400);
       expect(response.text).toContain("You do not have permission to delete resource");

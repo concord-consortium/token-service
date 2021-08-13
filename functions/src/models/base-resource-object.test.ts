@@ -112,6 +112,12 @@ const validClaims: JWTClaims = {
   user_id: "test-user-id",
   class_hash: "test-context-id"
 };
+const validClaimsWithTargetUserId: JWTClaims = {
+  platform_id: "test-platform-id",
+  platform_user_id: "researcher",
+  target_user_id: "test-user-id",
+  class_hash: "test-context-id"
+};
 
 const createBaseResource = (accessRules: AccessRule[] = []) => {
   return new BaseResourceObject("test", {
@@ -170,41 +176,39 @@ describe("Resource", () => {
     describe("#isOwner", () => {
       it("should fail with invalid claims", () => {
         expect(createBaseResource(validOwnerAccessRules).isOwner(invalidClaims)).toEqual(false);
+        expect(createBaseResource(invalidOwnerAccessRules).isOwner(validClaims)).toEqual(false);
       });
       it("should succeed with valid claims", () => {
         expect(createBaseResource(validOwnerAccessRules).isOwner(validClaims)).toEqual(true);
       });
     });
 
-    describe("#isOwnerOrMember", () => {
-      it("should fail with invalid owner access rules and valid claims", () => {
-        expect(createBaseResource(invalidOwnerAccessRules).isOwnerOrMember(validClaims)).toEqual(false);
+    describe("#isMember", () => {
+      it("should fail with invalid claims", () => {
+        expect(createBaseResource(validMemberAccessRules).isMember(invalidClaims)).toEqual(false);
+        expect(createBaseResource(invalidMemberAccessRules).isMember(validClaims)).toEqual(false);
       });
-      it("should fail with valid owner access rules and invalid claims", () => {
-        expect(createBaseResource(validOwnerAccessRules).isOwnerOrMember(invalidClaims)).toEqual(false);
+      it("should succeed with valid claims", () => {
+        expect(createBaseResource(validMemberAccessRules).isMember(validClaims)).toEqual(true);
       });
-      it("should succeed with valid owner access rules and valid claims", () => {
-        expect(createBaseResource(validOwnerAccessRules).isOwnerOrMember(validClaims)).toEqual(true);
-      });
+    });
 
-      it("should fail with invalid member access rules and valid claims", () => {
-        expect(createBaseResource(invalidMemberAccessRules).isOwnerOrMember(validClaims)).toEqual(false);
+    describe("#isContextMember", () => {
+      it("should fail if context access rule doesn't match claims", () => {
+        expect(createBaseResource(invalidContextAccessRules).isContextMember(validClaims)).toEqual(false);
+        expect(createBaseResource(validContextAccessRules).isContextMember(invalidClaims)).toEqual(false);
       });
-      it("should fail with valid member access rules and invalid claims", () => {
-        expect(createBaseResource(validMemberAccessRules).isOwnerOrMember(invalidClaims)).toEqual(false);
+      it("should succeed when context access rule matches claims", () => {
+        expect(createBaseResource(validContextAccessRules).isContextMember(validClaims)).toEqual(true);
       });
-      it("should succeed with valid member access rules and valid claims", () => {
-        expect(createBaseResource(validMemberAccessRules).isOwnerOrMember(validClaims)).toEqual(true);
-      });
+    });
 
-      it("should fail with invalid context access rules and valid claims", () => {
-        expect(createBaseResource(invalidContextAccessRules).isOwnerOrMember(validClaims)).toEqual(false);
+    describe("#hasAccessToTargetUserData", () => {
+      it("should fail if owner access rule doesn't match claims with target_user_id", () => {
+        expect(createBaseResource(invalidOwnerAccessRules).hasAccessToTargetUserData(validClaimsWithTargetUserId)).toEqual(false);
       });
-      it("should fail with valid context access rules and invalid claims", () => {
-        expect(createBaseResource(validContextAccessRules).isOwnerOrMember(invalidClaims)).toEqual(false);
-      });
-      it("should succeed with valid context access rules and valid claims", () => {
-        expect(createBaseResource(validContextAccessRules).isOwnerOrMember(validClaims)).toEqual(true);
+      it("should succeed when owner access rule matches claims with target_user_id", () => {
+        expect(createBaseResource(validOwnerAccessRules).hasAccessToTargetUserData(validClaimsWithTargetUserId)).toEqual(true);
       });
     });
 
@@ -219,16 +223,6 @@ describe("Resource", () => {
       it("should succeed with valid token", () => {
         expect(createBaseResource(validReadWriteTokenRules).isReadWriteTokenValid(validReadWriteToken1)).toEqual(true);
         expect(createBaseResource(validReadWriteTokenRules).isReadWriteTokenValid(validReadWriteToken2)).toEqual(true);
-      });
-    });
-
-    describe("#isContextMember", () => {
-      it("should fail if context access rule doesn't match claims", () => {
-        expect(createBaseResource(invalidContextAccessRules).isContextMember(validClaims)).toEqual(false);
-        expect(createBaseResource(validContextAccessRules).isContextMember(invalidClaims)).toEqual(false);
-      });
-      it("should succeed when context access rule matches claims", () => {
-        expect(createBaseResource(validContextAccessRules).isContextMember(validClaims)).toEqual(true);
       });
     });
   });
