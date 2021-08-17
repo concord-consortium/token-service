@@ -102,7 +102,7 @@ export const createResource = (db: FirebaseFirestore.Firestore, env: string, cla
     }
     return getResourceSettings(db, env, type, tool)
       .then((settings) => {
-        let accessRules: AccessRule[] = [];
+        const accessRules: AccessRule[] = [];
 
         // query.accessRuleType is a string or array of strings
         const queryAccessRules: AccessRuleType[] =
@@ -111,16 +111,16 @@ export const createResource = (db: FirebaseFirestore.Firestore, env: string, cla
           query.accessRuleType === "context" ? [ "user", "context" ] :
           (typeof query.accessRuleType === "string" ? [ query.accessRuleType ] : query.accessRuleType);
 
-        for (const accessRuleType of queryAccessRules) {
+        for (const accessRule of queryAccessRules) {
           if (!settings.allowedAccessRuleTypes) {
             reject(`${tool} configuration is missing allowedAccessRuleTypes list!`);
             return;
           }
-          if (settings.allowedAccessRuleTypes.indexOf(accessRuleType) === -1) {
-            reject(`"${accessRuleType}" access rule type is not allowed by ${tool} settings!`);
+          if (settings.allowedAccessRuleTypes.indexOf(accessRule) === -1) {
+            reject(`"${accessRule}" access rule type is not allowed by ${tool} settings!`);
             return;
           }
-          if (accessRuleType === "user") {
+          if (accessRule === "user") {
             if (!claims) {
               reject("JWT claims missing!");
               return;
@@ -128,7 +128,7 @@ export const createResource = (db: FirebaseFirestore.Firestore, env: string, cla
             const { user_id: userId, platform_id: platformId } = claims;
             accessRules.push({type: "user", role: "owner", userId, platformId} as UserAccessRule);
           }
-          else if (accessRuleType === "context") {
+          else if (accessRule === "context") {
             if (!claims) {
               reject("JWT claims missing!");
               return;
@@ -140,7 +140,7 @@ export const createResource = (db: FirebaseFirestore.Firestore, env: string, cla
             const { platform_id: platformId, class_hash: contextId } = claims;
             accessRules.push({type: "context", platformId, contextId} as ContextAccessRule);
           }
-          else if (accessRuleType === "readWriteToken") {
+          else if (accessRule === "readWriteToken") {
             // Generating new readWriteTokens is not recommended, they've been implemented to support documents imported
             // from the Document Store. ReadWriteTokenPrefix is necessary so auth methods can differentiate it from
             // regular JWT token. "token-service-generated:" is added just in case we want to easily find tokens/resources
