@@ -51,7 +51,7 @@ export interface FindAllQuery {
 export type ResourceQuery = Omit<Resource, "id">;
 
 export interface CreateQuery extends ResourceQuery {
-  accessRuleType: AccessRuleType;
+  accessRuleType: AccessRuleType | AccessRuleType[];
 }
 
 export type UpdateQuery = Partial<Omit<ResourceQuery, 'type' | 'tool'>>;
@@ -64,10 +64,10 @@ export interface Credentials {
 }
 
 export type ResourceType = "s3Folder" | "iotOrganization" | "athenaWorkgroup";
-export type AccessRuleType = "user" | "readWriteToken";
+export type AccessRuleType = "user" | "readWriteToken" | "context";
 export type AccessRuleRole = "owner" | "member";
 
-export type AccessRule = UserAccessRule | ReadWriteTokenAccessRule;
+export type AccessRule = UserAccessRule | ReadWriteTokenAccessRule | ContextAccessRule;
 
 export interface UserAccessRule {
   type: "user";
@@ -79,6 +79,12 @@ export interface UserAccessRule {
 export interface ReadWriteTokenAccessRule {
   type: "readWriteToken";
   readWriteToken: string;
+}
+
+export interface ContextAccessRule {
+  type: "context";
+  platformId: string;
+  contextId: string;
 }
 
 export const ReadWriteTokenPrefix = "read-write-token:";

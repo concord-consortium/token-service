@@ -89,7 +89,14 @@ export class BaseResourceObject implements BaseResource {
   }
 
   isOwnerOrMember(claims: JWTClaims): boolean {
-    return this.hasUserRole(claims, "owner") || this.hasUserRole(claims, "member");
+    return this.hasUserRole(claims, "owner") || this.hasUserRole(claims, "member") || this.isContextMember(claims);
+  }
+
+  isContextMember(claims: JWTClaims): boolean {
+    return !!this.accessRules.find((accessRule) =>
+      // class_hash is a Portal name for context_id
+      (accessRule.type === "context") && (accessRule.platformId === claims.platform_id)  && (accessRule.contextId === claims.class_hash)
+    );
   }
 
   isReadWriteTokenValid(readWriteToken: string): boolean {

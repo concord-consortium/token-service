@@ -107,7 +107,7 @@ const getClaimsFromJWT = (token: string): JWTClaims => {
       user_id: "http://example.com/users/test",
       platform_user_id: "test",
       platform_id: "http://example.com",
-      context_id: "testContextId"
+      class_hash: "testContextId"
     };
   }
   else {
@@ -127,8 +127,7 @@ const getClaimsFromJWT = (token: string): JWTClaims => {
     if (!claims.platform_id) {
       throw new Error("Missing platform_id in JWT claims!");
     }
-    // context_id is optional so don't test for it
-    // TODO: context_id is still "class_hash" rigse jwt_controller.rb - should it be class_hash here?
+    // class_hash is optional so don't test for it
     return claims;
   }
 };
