@@ -88,14 +88,21 @@ export class BaseResourceObject implements BaseResource {
     return this.hasUserRole(claims, "owner");
   }
 
-  isOwnerOrMember(claims: JWTClaims): boolean {
-    return this.hasUserRole(claims, "owner") || this.hasUserRole(claims, "member") || this.isContextMember(claims);
+  isMember(claims: JWTClaims): boolean {
+    return this.hasUserRole(claims, "member");
   }
 
   isContextMember(claims: JWTClaims): boolean {
     return !!this.accessRules.find((accessRule) =>
       // class_hash is a Portal name for context_id
       (accessRule.type === "context") && (accessRule.platformId === claims.platform_id)  && (accessRule.contextId === claims.class_hash)
+    );
+  }
+
+  hasAccessToTargetUserData(claims: JWTClaims): boolean {
+    // Usually researchers or teachers will have target_user_id specified in their claims.
+    return !!this.accessRules.find((accessRule) =>
+      (accessRule.type === "user") && (accessRule.role === "owner") && (accessRule.userId === claims.target_user_id) && (accessRule.platformId === claims.platform_id)
     );
   }
 

@@ -60,7 +60,10 @@ export interface JWTClaims {
   platform_user_id: string;
   platform_id: string | number;
   user_id: string | number;
+  // class_hash is a Portal's name of context id
   class_hash?: string;
+  // Usually only researchers will have this claim. It gives them an access to data of user specified by target_user_id.
+  target_user_id?: string | number;
 }
 
 export interface ReadWriteTokenClaims {

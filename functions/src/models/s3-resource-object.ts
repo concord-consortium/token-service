@@ -45,7 +45,7 @@ export class S3ResourceObject extends BaseResourceObject {
       return this.isReadWriteTokenValid(claims.readWriteToken);
     } else {
       // JTW claims
-      return this.isOwnerOrMember(claims);
+      return this.isOwner(claims) || this.isMember(claims) || this.isContextMember(claims) || this.hasAccessToTargetUserData(claims);
     }
   }
 
