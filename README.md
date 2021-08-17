@@ -30,7 +30,7 @@ The `jwt` option is required and the serviceUrl and env options are optional.  I
 
 ## Example App (`example-app` subdirectory)
 
-http://token-service.concord.org/example-app/index.html
+https://token-service.concord.org/example-app/index.html
 
 This app is designed to show how to use Token Service (TokenServiceClient) and it's meant to be used by developers to work on the new Token Service features or to provide recipes showing how to use its API.
 Note that errors are not handled, so in the real applications, you should consider adding that. It's not done here on purpose to keep the code smaller and less opinionated.
