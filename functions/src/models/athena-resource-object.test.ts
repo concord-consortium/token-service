@@ -1,7 +1,7 @@
 import { AthenaResourceObject } from "./athena-resource-object";
 import { AccessRule, ReadWriteTokenAccessRule, ReadWriteTokenPrefix } from "../resource-types";
 import { FireStoreAthenaWorkgroupSettings, JWTClaims, FireStoreResourceSettings } from "../firestore-types";
-import { fakeAwsCredentials, mockSend } from "../__mocks__/@aws-sdk/client-sts";
+import { fakeAwsCredentials, mockSend, AssumeRoleCommand } from "../__mocks__/@aws-sdk/client-sts";
 
 const config = {
   admin: {
@@ -116,6 +116,32 @@ describe("Resource", () => {
         sessionToken: fakeAwsCredentials.SessionToken
       });
     });
+    it("should pass correct credentials and parameters to STS", async () => {
+      mockSend.mockClear();
+      const settings = {bucket: "test-bucket", folder: "test-folder", region: "test-region", account: "12345"} as FireStoreAthenaWorkgroupSettings;
+      const resource = createAthenaResource([], "athena-reports");
+      await resource.createKeys(config, settings);
+
+      // Verify STSClient was constructed with correct credentials and region
+      const stsClient = mockSend.mock.instances[0];
+      expect((stsClient as any).config).toEqual({
+        region: "test-region",
+        credentials: {
+          accessKeyId: "test-aws-key",
+          secretAccessKey: "test-aws-secret"
+        }
+      });
+
+      // Verify AssumeRoleCommand was called with correct parameters
+      const command = mockSend.mock.calls[0][0] as AssumeRoleCommand;
+      expect(command.input).toEqual({
+        DurationSeconds: 3600,
+        Policy: expect.stringContaining("12345"),
+        RoleArn: "test-rolearn",
+        RoleSessionName: "token-service-athenaWorkgroup-athena-reports-id1234"
+      });
+    });
+
     it("should handle errors when creating keys", async () => {
       expect.assertions(1);
       const mockError = {error: "something failed"};

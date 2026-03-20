@@ -1,7 +1,7 @@
 import { S3ResourceObject } from "./s3-resource-object";
 import { AccessRule, ReadWriteTokenAccessRule, ReadWriteTokenPrefix } from "../resource-types";
 import { FireStoreResourceSettings, FireStoreS3ResourceSettings, JWTClaims } from "../firestore-types";
-import { fakeAwsCredentials, mockSend } from "../__mocks__/@aws-sdk/client-sts";
+import { fakeAwsCredentials, mockSend, AssumeRoleCommand } from "../__mocks__/@aws-sdk/client-sts";
 
 const config = {
   admin: {
@@ -169,6 +169,32 @@ describe("Resource", () => {
         sessionToken: fakeAwsCredentials.SessionToken
       });
     });
+    it("should pass correct credentials and parameters to STS", async () => {
+      mockSend.mockClear();
+      const settings = {bucket: "test-bucket", folder: "test-folder", region: "test-region"} as FireStoreS3ResourceSettings;
+      const resource = createS3Resource([], "glossary");
+      await resource.createKeys(config, settings);
+
+      // Verify STSClient was constructed with correct credentials and region
+      const stsClient = mockSend.mock.instances[0];
+      expect((stsClient as any).config).toEqual({
+        region: "test-region",
+        credentials: {
+          accessKeyId: "test-aws-key",
+          secretAccessKey: "test-aws-secret"
+        }
+      });
+
+      // Verify AssumeRoleCommand was called with correct parameters
+      const command = mockSend.mock.calls[0][0] as AssumeRoleCommand;
+      expect(command.input).toEqual({
+        DurationSeconds: 3600,
+        Policy: expect.stringContaining("test-bucket"),
+        RoleArn: "test-rolearn",
+        RoleSessionName: "token-service-s3Folder-glossary-test"
+      });
+    });
+
     it("should handle errors when creating keys", async () => {
       expect.assertions(1);
       const mockError = {error: "something failed"};

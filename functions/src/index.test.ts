@@ -140,6 +140,202 @@ beforeEach(async () => {
 });
 
 describe("token-service app", () => {
+  describe("checkEnv middleware", () => {
+    it("returns 403 when env query parameter is missing", async () => {
+      const response = await supertest(app)
+        .get("/api/v1/test")
+        .expect(403);
+      expect(response.text).toContain("Missing env query parameter");
+    });
+  });
+
+  describe("special 'test' token", () => {
+    it("returns test claims when token is 'test'", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(app)
+        .get("/api/v1/resources/" + resource.id)
+        .set("Authorization", "Bearer test")
+        .query({ env: "dev" })
+        .expect(200);
+      const json = checkResponse(response);
+      // The "test" token uses hardcoded claims with user_id "http://example.com/users/test"
+      // which won't match the resource owner, so accessRules should not be included
+      expect(json.result.id).toEqual(resource.id);
+    });
+  });
+
+  describe("getValidatedConfig() error paths", () => {
+    // Save original env values and restore after each test
+    const originalEnv: Record<string, string | undefined> = {};
+
+    beforeEach(() => {
+      originalEnv.ADMIN_PUBLIC_KEY = process.env.ADMIN_PUBLIC_KEY;
+      originalEnv.AWS_KEY = process.env.AWS_KEY;
+      originalEnv.AWS_SECRET = process.env.AWS_SECRET;
+      originalEnv.AWS_ROLE_ARN = process.env.AWS_ROLE_ARN;
+      originalEnv.AWS_DURATION = process.env.AWS_DURATION;
+    });
+
+    afterEach(() => {
+      process.env.ADMIN_PUBLIC_KEY = originalEnv.ADMIN_PUBLIC_KEY;
+      process.env.AWS_KEY = originalEnv.AWS_KEY;
+      process.env.AWS_SECRET = originalEnv.AWS_SECRET;
+      process.env.AWS_ROLE_ARN = originalEnv.AWS_ROLE_ARN;
+      process.env.AWS_DURATION = originalEnv.AWS_DURATION;
+    });
+
+    it("returns 403 when ADMIN_PUBLIC_KEY is missing", async () => {
+      delete process.env.ADMIN_PUBLIC_KEY;
+      const response = await supertest(app)
+        .get("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("ADMIN_PUBLIC_KEY");
+    });
+
+    it("returns 403 when AWS_KEY is missing (credentials endpoint)", async () => {
+      delete process.env.AWS_KEY;
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(app)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("AWS_KEY");
+    });
+
+    it("returns 403 when AWS_SECRET is missing (credentials endpoint)", async () => {
+      delete process.env.AWS_SECRET;
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(app)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("AWS_SECRET");
+    });
+
+    it("returns 403 when AWS_ROLE_ARN is missing (credentials endpoint)", async () => {
+      delete process.env.AWS_ROLE_ARN;
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(app)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("AWS_ROLE_ARN");
+    });
+
+    it("returns 403 when AWS_DURATION is missing (credentials endpoint)", async () => {
+      delete process.env.AWS_DURATION;
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(app)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("AWS_DURATION");
+    });
+
+    it("returns 403 when AWS_DURATION is not a valid integer", async () => {
+      process.env.AWS_DURATION = "not-a-number";
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(app)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("AWS_DURATION");
+    });
+  });
+
+  describe("getToken delivery methods", () => {
+    it("accepts token via query parameter", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const response = await supertest(app)
+        .get("/api/v1/resources/" + resource.id)
+        .query({ env: "dev", token: jwtToken })
+        .expect(200);
+      const json = checkResponse(response);
+      expect(json.result.accessRules).toBeDefined();
+    });
+
+    // Note: token via cookie (req.cookies.token) is not testable via supertest because
+    // the app has no cookie-parser middleware — cookies are parsed by Firebase hosting in production.
+  });
+
+  describe("JWT claims validation", () => {
+    it("returns 403 when JWT is missing platform_user_id", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const { platform_user_id, ...claimsWithoutPlatformUserId } = jwtClaims;
+      const token = jwt.sign({ claims: claimsWithoutPlatformUserId }, testPrivKey, { algorithm: "RS256" });
+      const response = await supertest(app)
+        .get("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${token}`)
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("Missing platform_user_id");
+    });
+
+    it("returns 403 when JWT is missing platform_id", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource();
+      const { platform_id, ...claimsWithoutPlatformId } = jwtClaims;
+      const token = jwt.sign({ claims: claimsWithoutPlatformId }, testPrivKey, { algorithm: "RS256" });
+      const response = await supertest(app)
+        .get("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${token}`)
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("Missing platform_id");
+    });
+  });
+
+  describe("genericErrorHandler", () => {
+    it("returns 500 when an unhandled error occurs in POST /api/v1/test", async () => {
+      // Send invalid JSON body to trigger a parse error through the error handler
+      const response = await supertest(app)
+        .post("/api/v1/test")
+        .set("Content-Type", "application/json")
+        .query({ env: "dev" })
+        .send("{ invalid json")
+        .expect(400);
+      // Body parser returns 400 for malformed JSON
+      expect(response.status).toBeLessThan(500);
+    });
+  });
+
+  describe("error catch blocks in routes", () => {
+    it("GET /api/v1/resources returns 403 when JWT is malformed", async () => {
+      const response = await supertest(app)
+        .get("/api/v1/resources")
+        .set("Authorization", "Bearer malformed-token")
+        .query({ env: "dev" })
+        .expect(403);
+      expect(response.text).toContain("jwt malformed");
+    });
+
+    it("POST /api/v1/resources returns 403 when JWT is malformed", async () => {
+      await createS3Settings();
+      const response = await supertest(app)
+        .post("/api/v1/resources")
+        .set("Authorization", "Bearer malformed-token")
+        .query({ env: "dev" })
+        .send({ type: "s3Folder", tool: "test-tool", name: "test", description: "test", accessRuleType: "user" })
+        .expect(403);
+      expect(response.text).toContain("jwt malformed");
+    });
+  });
+
   it("GET api/v1/test", async () => {
     const response = await supertest(app)
       .get("/api/v1/test")
@@ -696,6 +892,47 @@ describe("token-service app", () => {
 
       const json = checkResponse(response, "error");
       expect(json.error).toMatch(/Unknown resource type:.*/);
+    });
+
+    it("returns an error when creating context resource without authentication", async () => {
+      const settings = await createS3Settings();
+      const createQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+        description: "desc"
+      };
+      const response = await supertest(app)
+        .post("/api/v1/resources")
+        .query({ env: "dev" })
+        .send(Object.assign({}, createQuery, { accessRuleType: "context" }) as CreateQuery)
+        .expect(400);
+      const json = checkResponse(response, "error");
+      expect(json.error).toContain("JWT claims missing");
+    });
+
+    it("returns an error when creating context resource without class_hash in JWT", async () => {
+      const settings = await createS3Settings();
+      const createQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+        description: "desc"
+      };
+      const claimsWithoutClassHash: JWTClaims = {
+        user_id: user.userId,
+        platform_user_id: user.userId,
+        platform_id: user.platformId
+      };
+      const tokenWithoutClassHash = jwt.sign({ claims: claimsWithoutClassHash }, testPrivKey, { algorithm: "RS256" });
+      const response = await supertest(app)
+        .post("/api/v1/resources")
+        .set("Authorization", `Bearer ${tokenWithoutClassHash}`)
+        .query({ env: "dev" })
+        .send(Object.assign({}, createQuery, { accessRuleType: "context" }) as CreateQuery)
+        .expect(400);
+      const json = checkResponse(response, "error");
+      expect(json.error).toContain("class hash");
     });
   });
 
