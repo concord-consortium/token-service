@@ -1,9 +1,7 @@
 import { AthenaResourceObject } from "./athena-resource-object";
 import { AccessRule, ReadWriteTokenAccessRule, ReadWriteTokenPrefix } from "../resource-types";
 import { FireStoreAthenaWorkgroupSettings, JWTClaims, FireStoreResourceSettings } from "../firestore-types";
-import { fakeAwsCredentials, mockAssumeRole } from "../__mocks__/aws-sdk";
-// This should be mocked version
-// import { mockAssumeRole } from "aws-sdk";
+import { fakeAwsCredentials, mockSend } from "../__mocks__/@aws-sdk/client-sts";
 
 const config = {
   admin: {
@@ -119,21 +117,19 @@ describe("Resource", () => {
       });
     });
     it("should handle errors when creating keys", async () => {
-      // assumeRole = jest.fn((params, callback) => callback(null, { Credentials: fakeAwsCredentials }))
       expect.assertions(1);
       const mockError = {error: "something failed"};
-      mockAssumeRole.mockImplementation((params, callback) => callback(mockError));
+      mockSend.mockRejectedValueOnce(mockError);
       await expect(createAthenaResource().createKeys(config,
         {bucket: "test-bucket", folder: "test-folder", region: "test-region", account: "12345"} as FireStoreAthenaWorkgroupSettings))
         .rejects.toEqual(mockError);
     });
     it("should handle no credentials when creating keys", async () => {
-      // assumeRole = jest.fn((params, callback) => callback(null, { Credentials: fakeAwsCredentials }))
       expect.assertions(1);
-      mockAssumeRole.mockImplementation((params, callback) => callback(undefined, {}));
+      mockSend.mockResolvedValueOnce({});
       await expect(createAthenaResource().createKeys(config,
         {bucket: "test-bucket", folder: "test-folder", region: "test-region", account: "12345"} as FireStoreAthenaWorkgroupSettings))
-        .rejects.toMatch(/credentials/);
+        .rejects.toThrow(/credentials/);
     });
 
   });

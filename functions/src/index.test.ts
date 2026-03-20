@@ -1,6 +1,6 @@
 // @firebase/rules-unit-testing module is used to interact with the emulator that runs locally.
 // It's mostly described in the context of Firestore rules testing: https://firebase.google.com/docs/rules/unit-tests
-import * as firebaseTesting from "@firebase/rules-unit-testing";
+import { initializeTestEnvironment, RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import * as firebaseFunctionsTest from "firebase-functions-test";
 import * as fs from "fs";
 import * as jwt from "jsonwebtoken";
@@ -8,30 +8,24 @@ import * as supertest from "supertest";
 import { FireStoreS3Resource, FireStoreS3ResourceSettings, FireStoreIotOrganizationResource, JWTClaims } from "./firestore-types";
 import { CreateQuery, ReadWriteTokenPrefix, UpdateQuery, UserAccessRule, AccessRuleType, ContextAccessRule } from "./resource-types";
 import { S3ResourceObject } from "./models/s3-resource-object";
-import { fakeAwsCredentials } from "./__mocks__/aws-sdk";
-// This is necessary automatically setup config for test environment.
-// If you want to connect to real Firestore, configuration can be provided here.
-// Otherwise, emulator is needed. Emulator is set using env variable: FIRESTORE_EMULATOR_HOST
-// (check package.json scripts).
+import { fakeAwsCredentials } from "./__mocks__/@aws-sdk/client-sts";
+// Set env vars before importing index (secrets are read via process.env at runtime).
 const projectId = "test-project";
-const firebaseFunctionsEnv = firebaseFunctionsTest({ projectId });
-// These keys have been generated only for test needs.
 const testPrivKey = fs.readFileSync("./src/test-utils/test-private.pem").toString();
 const testPublicKey = fs.readFileSync("./src/test-utils/test-public.pem").toString();
-firebaseFunctionsEnv.mockConfig({
-  admin: {
-    public_key: testPublicKey
-  },
-  aws: {
-    duration: "3600",
-    rolearn: "test-role",
-    secret: "aws-secret",
-    key: "aws-key"
-  }
-});
-// Require ./index AFTER calling firebaseFunctionsTest and mocking config.
-// firebase.config() is used in the ./index module, so it needs to be mocked first.
+process.env.ADMIN_PUBLIC_KEY = testPublicKey;
+process.env.AWS_KEY = "aws-key";
+process.env.AWS_SECRET = "aws-secret";
+process.env.AWS_ROLE_ARN = "test-role";
+process.env.AWS_DURATION = "3600";
+// This is necessary to automatically setup Firebase Admin for the test environment.
+// Emulator is set using env variable: FIRESTORE_EMULATOR_HOST (check package.json scripts).
+const firebaseFunctionsEnv = firebaseFunctionsTest({ projectId });
+// Require ./index AFTER setting env vars.
 import { webApiV1, db } from "./index";
+// Cast webApiV1 to any for supertest — the HttpsFunction type from firebase-functions v4
+// is not directly assignable to supertest's App type, but works correctly at runtime.
+const app = webApiV1 as any;
 
 const checkResponse = (response: any, expectedStatus: string = "success") => {
   const json = JSON.parse(response.text);
@@ -133,16 +127,21 @@ const createIotResource = async () => {
   return Object.assign({ id: ref.id }, iotResource);
 };
 
+let testEnv: RulesTestEnvironment;
+beforeAll(async () => {
+  testEnv = await initializeTestEnvironment({ projectId });
+});
 afterAll(async () => {
+  await testEnv.cleanup();
   await firebaseFunctionsEnv.cleanup();
 });
 beforeEach(async () => {
-  await firebaseTesting.clearFirestoreData({ projectId });
+  await testEnv.clearFirestore();
 });
 
 describe("token-service app", () => {
   it("GET api/v1/test", async () => {
-    const response = await supertest(webApiV1)
+    const response = await supertest(app)
       .get("/api/v1/test")
       .query({ env: "dev" })
       .expect(200);
@@ -155,7 +154,7 @@ describe("token-service app", () => {
     // Ensure that we're dealing with EMPTY firestore db.
     expect(testEntries.size).toEqual(0);
     const content = { content: "TEST CONTENT" + Date.now() };
-    const response = await supertest(webApiV1)
+    const response = await supertest(app)
       .post("/api/v1/test")
       .query({ env: "dev" })
       .send(content)
@@ -170,7 +169,7 @@ describe("token-service app", () => {
     test("API returns 403 when JWT is malformed", async () => {
       await createS3Settings();
       const resource =await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources/" + resource.id)
         .set("Authorization", "Bearer malformed-JWT-token")
         .query({ env: "dev" })
@@ -183,17 +182,16 @@ describe("token-service app", () => {
       const resource =await createS3Resource();
 
       let token = jwt.sign({ noClaims: true }, testPrivKey, { algorithm: "RS256" });
-      let response = await supertest(webApiV1)
+      let response = await supertest(app)
         .get("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${token}`)
         .query({ env: "dev" })
         .expect(403);
       expect(response.text).toContain("Invalid token");
 
-      const incompleteClaims = Object.assign({}, jwtClaims);
-      delete incompleteClaims.user_id;
+      const { user_id, ...incompleteClaims } = jwtClaims;
       token = jwt.sign({ claims: incompleteClaims }, testPrivKey, { algorithm: "RS256" });
-      response = await supertest(webApiV1)
+      response = await supertest(app)
         .get("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${token}`)
         .query({ env: "dev" })
@@ -206,7 +204,7 @@ describe("token-service app", () => {
     it("returns resource without sensitive data when run anonymously", async () => {
       const settings = await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources/" + resource.id)
         .query({ env: "dev" })
         .expect(200);
@@ -220,7 +218,7 @@ describe("token-service app", () => {
       const resource = await createS3Resource({
         accessRules: [{ type: "user", role: "member", userId: user.userId, platformId: user.platformId } as UserAccessRule]
       });
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -238,7 +236,7 @@ describe("token-service app", () => {
           { type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule
         ]
       });
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -251,7 +249,7 @@ describe("token-service app", () => {
     it("returns resource without sensitive data when user has access using target_user_id claim", async () => {
       const settings = await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtTokenWithTargetUserId}`)
         .query({ env: "dev" })
@@ -264,7 +262,7 @@ describe("token-service app", () => {
     it("returns resource with sensitive data when user is authenticated (readWriteToken)", async () => {
       const settings = await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${readWriteToken}`)
         .query({ env: "dev" })
@@ -277,7 +275,7 @@ describe("token-service app", () => {
     it("returns resource with sensitive data when user is authenticated (JWT)", async () => {
       const settings = await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -289,7 +287,7 @@ describe("token-service app", () => {
 
     it("returns error when there are no settings for the resource", async () => {
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${readWriteToken}`)
         .query({ env: "dev" })
@@ -300,7 +298,7 @@ describe("token-service app", () => {
     });
 
     it("returns error when a resource with that id doesn't exist", async () => {
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources/1234")
         .set("Authorization", `Bearer ${readWriteToken}`)
         .query({ env: "dev" })
@@ -315,7 +313,7 @@ describe("token-service app", () => {
     it("returns all resources without sensitive data when run anonymously", async () => {
       const settings = await createS3Settings();
       const resources = [ await createS3Resource(), await createS3Resource(), await createS3Resource() ];
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources")
         .query({ env: "dev" })
         .expect(200);
@@ -338,7 +336,7 @@ describe("token-service app", () => {
       const settings = await createS3Settings();
       const resource1 = await createS3Resource();
       const resource2 = await createS3Resource({ accessRules: [] }); // no access for anyone
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -357,7 +355,7 @@ describe("token-service app", () => {
       const resource1 = await createS3Resource();
       await createS3Resource({ accessRules: [] }); // no owner
       // Ensure that we're dealing with EMPTY firestore db.
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev", amOwner: "true" })
@@ -373,7 +371,7 @@ describe("token-service app", () => {
       await createS3Resource();
       const resource2 = await createS3Resource({name: "unique-name"});
       // Ensure that we're dealing with EMPTY firestore db.
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev", name: "unique-name" })
@@ -389,7 +387,7 @@ describe("token-service app", () => {
       const resource1 = await createS3Resource();
       await createIotResource();
       // Ensure that we're dealing with EMPTY firestore db.
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev", type: "s3Folder" })
@@ -406,7 +404,7 @@ describe("token-service app", () => {
       await createS3Resource();
       const resource2 = await createS3Resource({tool: "different-tool"});
       // Ensure that we're dealing with EMPTY firestore db.
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .get("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev", tool: "different-tool" })
@@ -428,17 +426,17 @@ describe("token-service app", () => {
         name: "test.txt",
         description: "desc"
       };
-      await supertest(webApiV1)
+      await supertest(app)
         .post("/api/v1/resources")
         .query({ env: "dev" })
         .send(Object.assign({}, createQuery, { accessRuleType: "user" }) as CreateQuery)
         .expect(400);
-      await supertest(webApiV1)
+      await supertest(app)
         .post("/api/v1/resources")
         .query({ env: "dev" })
         .send(Object.assign({}, createQuery, { accessRuleType: "unknownAccessRuleType" }) as CreateQuery)
         .expect(400);
-      await supertest(webApiV1)
+      await supertest(app)
         .post("/api/v1/resources")
         .query({ env: "dev" })
         .send(Object.assign({}, createQuery, { accessRuleType: "readWriteToken" }) as CreateQuery)
@@ -456,7 +454,7 @@ describe("token-service app", () => {
         description: "desc",
         accessRuleType: "readWriteToken"
       };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources")
         .query({ env: "dev" })
         .send(createQuery)
@@ -493,7 +491,7 @@ describe("token-service app", () => {
         description: "desc",
         accessRuleType: "user"
       };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -530,7 +528,7 @@ describe("token-service app", () => {
         description: "desc",
         accessRuleType: ["user", "context"]
       };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -568,7 +566,7 @@ describe("token-service app", () => {
         description: "desc",
         accessRuleType: "context"
       };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -607,7 +605,7 @@ describe("token-service app", () => {
         name: "test.txt",
         accessRuleType: "user"
       };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -628,7 +626,7 @@ describe("token-service app", () => {
         name: "test.txt",
         description: "desc",
       };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -640,8 +638,7 @@ describe("token-service app", () => {
     });
 
     it("returns an error if the tool settings don't include allowAccessRuleTypes", async () => {
-      const invalidSettings = {...s3Settings};
-      delete invalidSettings.allowedAccessRuleTypes;
+      const { allowedAccessRuleTypes, ...invalidSettings } = s3Settings;
       const settings = await createFullS3Settings(invalidSettings);
 
       const createQuery = {
@@ -650,7 +647,7 @@ describe("token-service app", () => {
         name: "test.txt",
         description: "desc"
       };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -670,7 +667,7 @@ describe("token-service app", () => {
         name: "test.txt",
         description: "desc"
       };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -690,7 +687,7 @@ describe("token-service app", () => {
         name: "test.txt",
         description: "desc"
       };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -707,7 +704,7 @@ describe("token-service app", () => {
       await createS3Settings();
       const resource = await createS3Resource();
       const updateQuery: UpdateQuery = { description: "new description" };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .patch("/api/v1/resources/" + resource.id)
         .send(updateQuery)
         .query({ env: "dev" })
@@ -720,7 +717,7 @@ describe("token-service app", () => {
       await createS3Settings();
       const resource = await createS3Resource();
       const updateQuery: UpdateQuery = { description: "new description" };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .patch("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${readWriteToken}`)
         .send(updateQuery)
@@ -736,7 +733,7 @@ describe("token-service app", () => {
         accessRules: [{ type: "user", role: "member", userId: user.userId, platformId: user.platformId } as UserAccessRule]
       });
       const updateQuery: UpdateQuery = { description: "new description" };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .patch("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtToken}`)
         .send(updateQuery)
@@ -755,7 +752,7 @@ describe("token-service app", () => {
         ]
       });
       const updateQuery: UpdateQuery = { description: "new description" };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .patch("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtToken}`)
         .send(updateQuery)
@@ -769,7 +766,7 @@ describe("token-service app", () => {
       await createS3Settings();
       const resource = await createS3Resource();
       const updateQuery: UpdateQuery = { description: "new description" };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .patch("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtTokenWithTargetUserId}`)
         .send(updateQuery)
@@ -790,7 +787,7 @@ describe("token-service app", () => {
           {type: "user", role: "member", platformId: user.platformId, userId: "another-user"}
         ]
       };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .patch("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtToken}`)
         .send(updateQuery)
@@ -804,7 +801,7 @@ describe("token-service app", () => {
 
     it("returns error when a resource with that id doesn't exist", async () => {
       const updateQuery: UpdateQuery = { description: "new description" };
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .patch("/api/v1/resources/1234")
         .set("Authorization", `Bearer ${jwtToken}`)
         .send(updateQuery)
@@ -820,7 +817,7 @@ describe("token-service app", () => {
     it("fails if user is not authenticated", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources/" + resource.id + "/credentials")
         .query({ env: "dev" })
         .expect(403);
@@ -830,7 +827,7 @@ describe("token-service app", () => {
     it("returns credentials when user is an owner (JWT)", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources/" + resource.id + "/credentials")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -849,7 +846,7 @@ describe("token-service app", () => {
       const resource = await createS3Resource({
         accessRules: [{ type: "user", role: "member", userId: user.userId, platformId: user.platformId } as UserAccessRule]
       });
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources/" + resource.id + "/credentials")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -871,7 +868,7 @@ describe("token-service app", () => {
           { type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule
         ]
       });
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources/" + resource.id + "/credentials")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -888,7 +885,7 @@ describe("token-service app", () => {
     it("returns credentials when user has access using target_user_id claim (JWT)", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources/" + resource.id + "/credentials")
         .set("Authorization", `Bearer ${jwtTokenWithTargetUserId}`)
         .query({ env: "dev" })
@@ -907,7 +904,7 @@ describe("token-service app", () => {
       const resource = await createS3Resource({
         accessRules: []
       });
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources/" + resource.id + "/credentials")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -919,7 +916,7 @@ describe("token-service app", () => {
     it("returns credentials when user has readWriteToken", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .post("/api/v1/resources/" + resource.id + "/credentials")
         .set("Authorization", `Bearer ${readWriteToken}`)
         .query({ env: "dev" })
@@ -938,7 +935,7 @@ describe("token-service app", () => {
     it("fails if user is not authenticated", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .delete("/api/v1/resources/" + resource.id)
         .query({ env: "dev" })
         .expect(403);
@@ -949,7 +946,7 @@ describe("token-service app", () => {
     it("fails if user is trying to use readWriteToken (so user can't delete the shared document)", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .delete("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${readWriteToken}`)
         .query({ env: "dev" })
@@ -963,7 +960,7 @@ describe("token-service app", () => {
       const resource = await createS3Resource({
         accessRules: [{ type: "user", role: "member", userId: user.userId, platformId: user.platformId } as UserAccessRule]
       });
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .delete("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -980,7 +977,7 @@ describe("token-service app", () => {
           { type: "context", contextId: user.contextId, platformId: user.platformId } as ContextAccessRule
         ]
       });
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .delete("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -992,7 +989,7 @@ describe("token-service app", () => {
     it("fails if user has access using target_user_id", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .delete("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtTokenWithTargetUserId}`)
         .query({ env: "dev" })
@@ -1004,7 +1001,7 @@ describe("token-service app", () => {
     it("deletes resource if user is an owner", async () => {
       await createS3Settings();
       const resource = await createS3Resource();
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .delete("/api/v1/resources/" + resource.id)
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
@@ -1014,7 +1011,7 @@ describe("token-service app", () => {
     });
 
     it("returns error when a resource with that id doesn't exist", async () => {
-      const response = await supertest(webApiV1)
+      const response = await supertest(app)
         .delete("/api/v1/resources/1234")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })

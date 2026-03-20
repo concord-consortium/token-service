@@ -1,4 +1,5 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
+import { defineSecret, defineString } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import * as express from 'express';
 import * as bodyParser from 'body-parser';
@@ -10,7 +11,15 @@ import { Config, ReadWriteTokenPrefix } from './resource-types';
 import { AuthClaims, JWTClaims } from './firestore-types';
 import { verify } from 'jsonwebtoken';
 
+// Parameterized configuration (secrets accessed at runtime, not module load)
+const ADMIN_PUBLIC_KEY = defineSecret("ADMIN_PUBLIC_KEY");
+const AWS_KEY = defineSecret("AWS_KEY");
+const AWS_SECRET = defineSecret("AWS_SECRET");
+const AWS_ROLE_ARN = defineSecret("AWS_ROLE_ARN");
+const AWS_DURATION = defineString("AWS_DURATION");
+
 // insert custom data and handlers in type declarations
+/* eslint-disable @typescript-eslint/no-namespace */
 declare global {
   namespace Express {
     interface Request {
@@ -22,11 +31,9 @@ declare global {
     }
   }
 }
+/* eslint-enable @typescript-eslint/no-namespace */
 
-admin.initializeApp(functions.config().firebase);
-admin.firestore().settings({
-  timestampsInSnapshots: true   // this removes a deprecation warning
-});
+admin.initializeApp();
 export const db = admin.firestore();
 
 const app = express();
@@ -58,36 +65,36 @@ const checkEnv = (req: express.Request, res: express.Response, next: express.Nex
   }
 };
 
-const getValidatedConfig = () => {
-  const config = functions.config() as Config;
-  if (!config.admin) {
-    throw new Error("Missing admin object in config!");
+const getValidatedConfig = (): Config => {
+  const publicKey = ADMIN_PUBLIC_KEY.value();
+  const key = AWS_KEY.value();
+  const secret = AWS_SECRET.value();
+  const rolearn = AWS_ROLE_ARN.value();
+  const durationStr = AWS_DURATION.value();
+
+  if (!publicKey) {
+    throw new Error("Missing ADMIN_PUBLIC_KEY secret!");
   }
-  if (!config.admin.public_key) {
-    throw new Error("Missing admin.public_key in config!");
+  if (!key) {
+    throw new Error("Missing AWS_KEY secret!");
   }
-  if (!config.aws) {
-    throw new Error("Missing aws object in config!");
+  if (!secret) {
+    throw new Error("Missing AWS_SECRET secret!");
   }
-  if (!config.aws.key) {
-    throw new Error("Missing aws.key in config!");
+  if (!rolearn) {
+    throw new Error("Missing AWS_ROLE_ARN secret!");
   }
-  if (!config.aws.secret) {
-    throw new Error("Missing aws.secret in config!");
+  if (!durationStr) {
+    throw new Error("Missing AWS_DURATION config!");
   }
-  if (!config.aws.rolearn) {
-    throw new Error("Missing aws.rolearn in config!");
-  }
-  if (!config.aws.duration) {
-    throw new Error("Missing aws.duration in config!");
-  }
-  // configs are stored as strings but we want duration as a number
-  const duration = parseInt(config.aws.duration as unknown as string, 10);
+  const duration = parseInt(durationStr, 10);
   if (isNaN(duration)) {
-    throw new Error("aws.duration is not convertable to an integer!");
+    throw new Error("AWS_DURATION is not convertable to an integer!");
   }
-  config.aws.duration = duration;
-  return config;
+  return {
+    admin: { public_key: publicKey },
+    aws: { key, secret, rolearn, duration }
+  };
 };
 
 const getToken = (req: express.Request): string | undefined => {
@@ -266,4 +273,6 @@ app.delete('/api/v1/resources/:id', (req, res) => {
   }
 });
 
-export const webApiV1 = functions.https.onRequest(app);
+export const webApiV1 = functions
+  .runWith({ secrets: [ADMIN_PUBLIC_KEY, AWS_KEY, AWS_SECRET, AWS_ROLE_ARN] })
+  .https.onRequest(app);
