@@ -300,17 +300,15 @@ describe("token-service app", () => {
     });
   });
 
-  describe("genericErrorHandler", () => {
-    it("returns 500 when an unhandled error occurs in POST /api/v1/test", async () => {
-      // Send invalid JSON body to trigger a parse error through the error handler
+  describe("body parser error handling", () => {
+    it("returns 400 when request body contains malformed JSON", async () => {
       const response = await supertest(app)
         .post("/api/v1/test")
         .set("Content-Type", "application/json")
         .query({ env: "dev" })
         .send("{ invalid json")
         .expect(400);
-      // Body parser returns 400 for malformed JSON
-      expect(response.status).toBeLessThan(500);
+      expect(response.text).toContain("SyntaxError");
     });
   });
 
