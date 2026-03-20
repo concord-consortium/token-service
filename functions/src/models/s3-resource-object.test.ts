@@ -1,7 +1,7 @@
 import { S3ResourceObject } from "./s3-resource-object";
 import { AccessRule, ReadWriteTokenAccessRule, ReadWriteTokenPrefix } from "../resource-types";
 import { FireStoreResourceSettings, FireStoreS3ResourceSettings, JWTClaims } from "../firestore-types";
-import { fakeAwsCredentials, mockSend, AssumeRoleCommand } from "../__mocks__/@aws-sdk/client-sts";
+import { fakeAwsCredentials, mockSend, STSClient, AssumeRoleCommand } from "../__mocks__/@aws-sdk/client-sts";
 
 const config = {
   admin: {
@@ -176,8 +176,7 @@ describe("Resource", () => {
       await resource.createKeys(config, settings);
 
       // Verify STSClient was constructed with correct credentials and region
-      const stsClient = mockSend.mock.instances[0];
-      expect((stsClient as any).config).toEqual({
+      expect(STSClient).toHaveBeenCalledWith({
         region: "test-region",
         credentials: {
           accessKeyId: "test-aws-key",

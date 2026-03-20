@@ -7,13 +7,12 @@ export const fakeAwsCredentials = {
 
 export const mockSend = jest.fn().mockResolvedValue({ Credentials: fakeAwsCredentials });
 
-export class STSClient {
-  public config: any;
-  constructor(config: any) {
-    this.config = config;
-  }
-  send = mockSend;
-}
+export const STSClient = jest.fn().mockImplementation((config: any) => {
+  return {
+    config,
+    send: mockSend,
+  };
+});
 
 export class AssumeRoleCommand {
   constructor(public input: any) {}

@@ -89,7 +89,7 @@ const getValidatedConfig = (): Config => {
   }
   const duration = parseInt(durationStr, 10);
   if (isNaN(duration)) {
-    throw new Error("AWS_DURATION is not convertable to an integer!");
+    throw new Error("AWS_DURATION is not convertible to an integer!");
   }
   return {
     admin: { public_key: publicKey },
