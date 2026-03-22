@@ -1,0 +1,19 @@
+export const fakeAwsCredentials = {
+  AccessKeyId: "test-key-id",
+  Expiration: 1000,
+  SecretAccessKey: "test-secret-access-key",
+  SessionToken: "test-session-token",
+};
+
+export const mockSend = jest.fn().mockResolvedValue({ Credentials: fakeAwsCredentials });
+
+export const STSClient = jest.fn().mockImplementation((config: any) => {
+  return {
+    config,
+    send: mockSend,
+  };
+});
+
+export class AssumeRoleCommand {
+  constructor(public input: any) {}
+}

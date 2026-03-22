@@ -70,3 +70,8 @@ node_modules/
 # built client files (will be built in prePublish script when published to npm)
 lib/
 
+# Firebase local dev secrets
+.secret.local
+.runtimeconfig.json
+key.json
+

@@ -1,9 +1,7 @@
 import { S3ResourceObject } from "./s3-resource-object";
 import { AccessRule, ReadWriteTokenAccessRule, ReadWriteTokenPrefix } from "../resource-types";
 import { FireStoreResourceSettings, FireStoreS3ResourceSettings, JWTClaims } from "../firestore-types";
-import { fakeAwsCredentials, mockAssumeRole } from "../__mocks__/aws-sdk";
-// This should be mocked version
-// import { mockAssumeRole } from "aws-sdk";
+import { fakeAwsCredentials, mockSend, STSClient, AssumeRoleCommand } from "../__mocks__/@aws-sdk/client-sts";
 
 const config = {
   admin: {
@@ -171,22 +169,45 @@ describe("Resource", () => {
         sessionToken: fakeAwsCredentials.SessionToken
       });
     });
+    it("should pass correct credentials and parameters to STS", async () => {
+      mockSend.mockClear();
+      const settings = {bucket: "test-bucket", folder: "test-folder", region: "test-region"} as FireStoreS3ResourceSettings;
+      const resource = createS3Resource([], "glossary");
+      await resource.createKeys(config, settings);
+
+      // Verify STSClient was constructed with correct credentials and region
+      expect(STSClient).toHaveBeenCalledWith({
+        region: "test-region",
+        credentials: {
+          accessKeyId: "test-aws-key",
+          secretAccessKey: "test-aws-secret"
+        }
+      });
+
+      // Verify AssumeRoleCommand was called with correct parameters
+      const command = mockSend.mock.calls[0][0] as AssumeRoleCommand;
+      expect(command.input).toEqual({
+        DurationSeconds: 3600,
+        Policy: expect.stringContaining("test-bucket"),
+        RoleArn: "test-rolearn",
+        RoleSessionName: "token-service-s3Folder-glossary-test"
+      });
+    });
+
     it("should handle errors when creating keys", async () => {
-      // assumeRole = jest.fn((params, callback) => callback(null, { Credentials: fakeAwsCredentials }))
       expect.assertions(1);
       const mockError = {error: "something failed"};
-      mockAssumeRole.mockImplementation((params, callback) => callback(mockError));
+      mockSend.mockRejectedValueOnce(mockError);
       await expect(createS3Resource().createKeys(config,
         {bucket: "test-bucket", folder: "test-folder", region: "test-region"} as FireStoreS3ResourceSettings))
         .rejects.toEqual(mockError);
     });
     it("should handle no credentials when creating keys", async () => {
-      // assumeRole = jest.fn((params, callback) => callback(null, { Credentials: fakeAwsCredentials }))
       expect.assertions(1);
-      mockAssumeRole.mockImplementation((params, callback) => callback(undefined, {}));
+      mockSend.mockResolvedValueOnce({});
       await expect(createS3Resource().createKeys(config,
         {bucket: "test-bucket", folder: "test-folder", region: "test-region"} as FireStoreS3ResourceSettings))
-        .rejects.toMatch(/credentials/);
+        .rejects.toThrow(/credentials/);
     });
 
   });

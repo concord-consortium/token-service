@@ -2,6 +2,10 @@ import { getRWTokenFromAccessRules } from "./common-helpers";
 import { AccessRule, S3Resource } from "./resource-types";
 
 describe("getRWTokenFromAccessRules", () => {
+  it("returns undefined when accessRules is undefined", () => {
+    expect(getRWTokenFromAccessRules({} as S3Resource)).toEqual(undefined);
+  });
+
   it("parses access rules and extracts read write token", () => {
     expect(getRWTokenFromAccessRules({
       accessRules: [
