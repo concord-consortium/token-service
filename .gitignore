@@ -75,3 +75,6 @@ lib/
 .runtimeconfig.json
 key.json
 
+
+# Git worktrees
+.worktrees
