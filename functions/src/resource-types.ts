@@ -64,10 +64,10 @@ export interface Credentials {
 }
 
 export type ResourceType = "s3Folder" | "iotOrganization" | "athenaWorkgroup";
-export type AccessRuleType = "user" | "readWriteToken" | "context";
+export type AccessRuleType = "user" | "readWriteToken" | "context" | "authenticated";
 export type AccessRuleRole = "owner" | "member";
 
-export type AccessRule = UserAccessRule | ReadWriteTokenAccessRule | ContextAccessRule;
+export type AccessRule = UserAccessRule | ReadWriteTokenAccessRule | ContextAccessRule | AuthenticatedAccessRule;
 
 export interface UserAccessRule {
   type: "user";
@@ -85,6 +85,12 @@ export interface ContextAccessRule {
   type: "context";
   platformId: string;
   contextId: string;
+}
+
+// Grants access to any user presenting a valid portal JWT, regardless of platform or user id.
+// Credentials only — update/delete/read-accessRules still require an owner rule.
+export interface AuthenticatedAccessRule {
+  type: "authenticated";
 }
 
 export const ReadWriteTokenPrefix = "read-write-token:";
