@@ -41,8 +41,6 @@ Optional PATCH body parameters:
 - `name` - name of the resource
 - `description` - description of the resource
 - `accessRules` - an array of access rules
-- `bucket` - if the resource type is `s3Folder` then this updates the bucket
-- `folder` -if the resource type is `s3Folder` then this updates the folder
 
 Note: an `accessRules` array containing an `authenticated` rule is rejected unless the tool's `allowedAccessRuleTypes` settings include `authenticated`.
 

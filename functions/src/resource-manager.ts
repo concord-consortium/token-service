@@ -156,7 +156,7 @@ export const createResource = (db: FirebaseFirestore.Firestore, env: string, cla
             accessRules.push({type: "authenticated"} as AuthenticatedAccessRule);
           }
           else {
-            reject(`Unknown access rule type: ${accessRuleType}`);
+            reject(`Unknown access rule type: ${accessRule}`);
             return;
           }
         }
