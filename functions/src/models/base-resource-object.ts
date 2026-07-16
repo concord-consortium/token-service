@@ -99,6 +99,12 @@ export class BaseResourceObject implements BaseResource {
     );
   }
 
+  hasAuthenticatedRule(): boolean {
+    // Grants access to any user with a valid portal JWT. The JWT itself is verified before
+    // JWTClaims are constructed, so no claim matching is needed here.
+    return !!this.accessRules.find((accessRule) => accessRule.type === "authenticated");
+  }
+
   hasAccessToTargetUserData(claims: JWTClaims): boolean {
     // Usually researchers or teachers will have target_user_id specified in their claims.
     return !!this.accessRules.find((accessRule) =>
