@@ -11,8 +11,8 @@ All api endpoints require the request to use `Content-Type: application/json` an
 Optional query string parameters:
 
 - `name` - name of the resource
-- `type` - type of the resource, currently s3Folder or iotOrganization
-- `tool` - tool based on type of the resource, currently glossary, rubric or dataFlow
+- `type` - type of the resource, currently s3Folder, iotOrganization or athenaWorkgroup
+- `tool` - tool based on type of the resource, e.g. glossary, rubric or dataFlow
 - `amOwner` - if `true` then only resources owned by the user are returned
 
 returns a 200 status code when successful with JSON array of resources.  Any errors are returned with a 400 status code.
@@ -27,8 +27,8 @@ Required POST body parameters:
 
 - `name` - name of the resource
 - `description` - description of the resource
-- `type` - type of the resource, currently s3Folder or iotOrganization
-- `tool` - tool based on type of the resource, currently glossary, rubric or dataFlow
+- `type` - type of the resource, currently s3Folder, iotOrganization or athenaWorkgroup
+- `tool` - tool based on type of the resource, e.g. glossary, rubric or dataFlow
 - `accessRuleType` - user, context, readWriteToken or authenticated (string or array of strings). The string forms `context` and `authenticated` automatically add a `user` owner rule so the creator keeps control; array forms are applied verbatim (an array without `user` creates a resource that can never be updated or deleted). `authenticated` grants credential access to any user with a valid portal JWT, must be enabled in the tool's `allowedAccessRuleTypes` settings, and applies to s3Folder resources only.
 - `accessRuleRole` - owner or member
 
@@ -51,5 +51,7 @@ Returns a 200 status code with a single resource that was updated.  Any errors a
 ### `POST /api/v1/resources/:id/credentials`
 
 No parameters.
+
+Credentials are granted according to the resource's access rules; a resource with an `authenticated` rule grants credentials to any user with a valid portal JWT.
 
 Returns a 200 status code with the temporary aws credentials.  Any errors are returned with a 400 status code.
