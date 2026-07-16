@@ -1100,6 +1100,48 @@ describe("token-service app", () => {
       expect(await getFirstResource()).toEqual(expect.objectContaining(updateQuery));
     });
 
+    it("rejects adding an authenticated rule when tool settings don't allow it", async () => {
+      await createS3Settings(); // default allowlist has no "authenticated"
+      const resource = await createS3Resource();
+      const updateQuery: UpdateQuery = {
+        accessRules: [
+          {type: "user", role: "owner", platformId: user.platformId, userId: user.userId},
+          {type: "authenticated"} as AuthenticatedAccessRule
+        ]
+      };
+      const response = await supertest(app)
+        .patch("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .send(updateQuery)
+        .query({ env: "dev" })
+        .expect(400);
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual(`"authenticated" access rule type is not allowed by test-tool settings!`);
+      expect(await getFirstResource()).not.toEqual(expect.objectContaining(updateQuery));
+    });
+
+    it("allows adding an authenticated rule when tool settings allow it", async () => {
+      await createS3Settings({
+        allowedAccessRuleTypes: ["user", "readWriteToken", "context", "authenticated"]
+      });
+      const resource = await createS3Resource();
+      const updateQuery: UpdateQuery = {
+        accessRules: [
+          {type: "user", role: "owner", platformId: user.platformId, userId: user.userId},
+          {type: "authenticated"} as AuthenticatedAccessRule
+        ]
+      };
+      const response = await supertest(app)
+        .patch("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .send(updateQuery)
+        .query({ env: "dev" })
+        .expect(200);
+      const json = checkResponse(response);
+      expect(json.result).toEqual(expect.objectContaining(updateQuery));
+      expect(await getFirstResource()).toEqual(expect.objectContaining(updateQuery));
+    });
+
     it("returns error when a resource with that id doesn't exist", async () => {
       const updateQuery: UpdateQuery = { description: "new description" };
       const response = await supertest(app)

@@ -198,7 +198,21 @@ export const updateResource = (db: FirebaseFirestore.Firestore, env: string, cla
             if (description) update.description = description;
             if (accessRules) update.accessRules = accessRules;
 
-            return docRef.update(update)
+            // The "authenticated" rule opens the resource to every portal user, so adding it via
+            // PATCH is gated by the same per-tool allowlist as create-time rules.
+            const addsAuthenticatedRule = !!accessRules && accessRules.some(rule => rule.type === "authenticated");
+            const checkAuthenticatedAllowed: Promise<void> = !addsAuthenticatedRule
+              ? Promise.resolve()
+              : getResourceSettings(db, env, resource.type, resource.tool)
+                  .then(settings => {
+                    if (!settings.allowedAccessRuleTypes || settings.allowedAccessRuleTypes.indexOf("authenticated") === -1) {
+                      return Promise.reject(`"authenticated" access rule type is not allowed by ${resource.tool} settings!`);
+                    }
+                    return;
+                  });
+
+            return checkAuthenticatedAllowed
+                    .then(() => docRef.update(update))
                     .then(() => docRef.get())
                     .then((updatedDocSnapshot) => fromDocumentSnapshot(updatedDocSnapshot))
                     .then(resolve)
