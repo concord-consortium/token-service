@@ -37,6 +37,12 @@ const validReadWriteTokenRules: ReadWriteTokenAccessRule[] = [
   }
 ];
 
+const authenticatedAccessRules: AccessRule[] = [
+  {
+    type: "authenticated"
+  }
+];
+
 const invalidClaims: JWTClaims = {
   platform_id: "invalid-test-platform-id",
   platform_user_id: "invalid-1",
@@ -146,6 +152,19 @@ describe("Resource", () => {
     it("should allow keys to be created with owner claims or readWriteToken", () => {
       expect(createS3Resource(validOwnerAccessRules).canCreateKeys(validClaims)).toEqual(true);
       expect(createS3Resource(validReadWriteTokenRules).canCreateKeys({ readWriteToken: validReadWriteToken1 })).toEqual(true);
+    });
+
+    it("should allow keys to be created with any valid JWT claims when authenticated rule is present", () => {
+      // invalidClaims are valid JWT claims that simply don't match any user/context rule.
+      expect(createS3Resource(authenticatedAccessRules).canCreateKeys(invalidClaims)).toEqual(true);
+      expect(createS3Resource(authenticatedAccessRules).canCreateKeys(validClaims)).toEqual(true);
+      // Realistic shape: authenticated rule alongside an owner rule.
+      expect(createS3Resource([...validOwnerAccessRules, ...authenticatedAccessRules]).canCreateKeys(invalidClaims)).toEqual(true);
+    });
+
+    it("should not allow keys to be created via readWriteToken when only authenticated rule is present", () => {
+      // The authenticated rule requires a JWT; a readWriteToken auth must still match a readWriteToken rule.
+      expect(createS3Resource(authenticatedAccessRules).canCreateKeys({ readWriteToken: validReadWriteToken1 })).toEqual(false);
     });
 
     it("should create keys", async () => {
