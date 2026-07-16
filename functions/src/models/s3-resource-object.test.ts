@@ -167,6 +167,14 @@ describe("Resource", () => {
       expect(createS3Resource(authenticatedAccessRules).canCreateKeys({ readWriteToken: validReadWriteToken1 })).toEqual(false);
     });
 
+    it("should not allow update, delete or reading access rules via the authenticated rule", () => {
+      const resource = createS3Resource(authenticatedAccessRules);
+      // invalidClaims are valid JWT claims that don't match any owner rule.
+      expect(resource.canUpdate(invalidClaims)).toEqual(false);
+      expect(resource.canDelete(invalidClaims)).toEqual(false);
+      expect(resource.canReadAccessRules(invalidClaims)).toEqual(false);
+    });
+
     it("should create keys", async () => {
       const keys = await createS3Resource().createKeys(config, {bucket: "test-bucket", folder: "test-folder", region: "test-region"} as FireStoreS3ResourceSettings);
       expect(keys).toEqual({
