@@ -40,7 +40,11 @@ Add an `"authenticated"` branch to `createResource`'s rule-construction loop, mi
 - `accessRuleType: "authenticated"` auto-expands to `["user", "authenticated"]`, so the creator keeps an owner rule and retains update/delete control.
 - Gated by the existing `settings.allowedAccessRuleTypes` check; tools that do not allowlist `"authenticated"` reject it with the existing error.
 
-Owners of existing resources can add the rule via `PATCH /api/v1/resources/:id`; `updateResource` already applies an owner-supplied `accessRules` array verbatim.
+Owners of existing resources can add the rule via `PATCH /api/v1/resources/:id`, but `updateResource` gains a narrow check: an `accessRules` array containing an `authenticated` rule is rejected unless the tool's settings allowlist `"authenticated"`. (Other rule types keep the existing verbatim-update behavior.) This keeps the per-tool gate authoritative for both create and update paths.
+
+## Test-token hardening (added after code review)
+
+`getClaimsFromJWT` honored the literal token `"test"` (hardcoded claims) in every environment. With `authenticated` rules in play, anyone sending `Bearer test` would obtain real AWS credentials from production resources carrying the rule. The shortcut is now gated to `process.env.FIRESTORE_EMULATOR_HOST` — it works for local dev and tests, and deployed environments always verify against `ADMIN_PUBLIC_KEY`.
 
 ## Permission checks
 
@@ -70,4 +74,4 @@ Owners of existing resources can add the rule via `PATCH /api/v1/resources/:id`;
 
 ## Rollout / ops
 
-Per environment, an admin adds `"authenticated"` to `allowedAccessRuleTypes` in the target tool's `resourceSettings` doc; the feature is inert until then. Every credential grant is still scoped to the single resource's folder (`{folder}/{id}/`), but any portal user can write there — enable only for tools where shared write is intended.
+Per environment, an admin adds `"authenticated"` to `allowedAccessRuleTypes` in the target tool's `resourceSettings` doc; the feature is inert until then — enforced on both resource creation and PATCH. Every credential grant is still scoped to the single resource's folder (`{folder}/{id}/`), but any portal user can write there — enable only for tools where shared write is intended.

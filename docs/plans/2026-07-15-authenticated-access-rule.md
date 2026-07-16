@@ -220,11 +220,28 @@ Add after `"should allow keys to be created with owner claims"` (~line 96):
 Run: `cd functions && npm test -- src/models/athena-resource-object.test.ts`
 Expected: PASS. If it FAILS, stop — Athena's `canCreateKeys` is picking up the rule and the design has been violated.
 
-**Step 3: Commit**
+**Step 3: Pin the "credentials only" invariant at the unit level**
+
+In `functions/src/models/s3-resource-object.test.ts`, add after the readWriteToken guard test added in Task 3:
+
+```ts
+    it("should not allow update, delete or reading access rules via the authenticated rule", () => {
+      const resource = createS3Resource(authenticatedAccessRules);
+      // invalidClaims are valid JWT claims that don't match any owner rule.
+      expect(resource.canUpdate(invalidClaims)).toEqual(false);
+      expect(resource.canDelete(invalidClaims)).toEqual(false);
+      expect(resource.canReadAccessRules(invalidClaims)).toEqual(false);
+    });
+```
+
+Run: `cd functions && npm test -- src/models/s3-resource-object.test.ts`
+Expected: PASS (these are regression pins; if any fails, stop — the credentials-only boundary is broken).
+
+**Step 4: Commit**
 
 ```bash
-git add functions/src/models/athena-resource-object.test.ts
-git commit -m "test: pin authenticated rule as S3-only (no effect on Athena)"
+git add functions/src/models/athena-resource-object.test.ts functions/src/models/s3-resource-object.test.ts
+git commit -m "test: pin authenticated rule as S3-only and credentials-only"
 ```
 
 ---
@@ -354,6 +371,177 @@ Expected: PASS (all tests in file).
 ```bash
 git add functions/src/resource-manager.ts functions/src/index.test.ts
 git commit -m "feat: support authenticated access rule type in createResource"
+```
+
+---
+
+### Task 5b: Enforce `allowedAccessRuleTypes` for `authenticated` on PATCH
+
+Code review found that `updateResource` applies owner-supplied `accessRules` verbatim, letting an owner PATCH `{type: "authenticated"}` into a resource of a tool that never allowlisted it — contradicting the "inert until an admin enables it" rollout story. Decision: enforce the allowlist on PATCH, narrowly (authenticated only; existing user/context/readWriteToken PATCH behavior unchanged).
+
+**Files:**
+- Modify: `functions/src/resource-manager.ts` (`updateResource`)
+- Test: `functions/src/index.test.ts` (inside `describe("PATCH api/v1/resources/:id", ...)`)
+
+**Step 1: Write the failing tests**
+
+Add inside the PATCH describe block, after `"updates resource if user is an owner"`:
+
+```ts
+    it("rejects adding an authenticated rule when tool settings don't allow it", async () => {
+      await createS3Settings(); // default allowlist has no "authenticated"
+      const resource = await createS3Resource();
+      const updateQuery: UpdateQuery = {
+        accessRules: [
+          {type: "user", role: "owner", platformId: user.platformId, userId: user.userId},
+          {type: "authenticated"} as AuthenticatedAccessRule
+        ]
+      };
+      const response = await supertest(app)
+        .patch("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .send(updateQuery)
+        .query({ env: "dev" })
+        .expect(400);
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual(`"authenticated" access rule type is not allowed by test-tool settings!`);
+      expect(await getFirstResource()).not.toEqual(expect.objectContaining(updateQuery));
+    });
+
+    it("allows adding an authenticated rule when tool settings allow it", async () => {
+      await createS3Settings({
+        allowedAccessRuleTypes: ["user", "readWriteToken", "context", "authenticated"]
+      });
+      const resource = await createS3Resource();
+      const updateQuery: UpdateQuery = {
+        accessRules: [
+          {type: "user", role: "owner", platformId: user.platformId, userId: user.userId},
+          {type: "authenticated"} as AuthenticatedAccessRule
+        ]
+      };
+      const response = await supertest(app)
+        .patch("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .send(updateQuery)
+        .query({ env: "dev" })
+        .expect(200);
+      const json = checkResponse(response);
+      expect(json.result).toEqual(expect.objectContaining(updateQuery));
+      expect(await getFirstResource()).toEqual(expect.objectContaining(updateQuery));
+    });
+```
+
+**Step 2: Run the tests to verify the first fails**
+
+Run: `cd functions && npm test -- src/index.test.ts`
+Expected: the reject test FAILS (PATCH currently returns 200). The allow test passes already.
+
+**Step 3: Write the minimal implementation**
+
+In `updateResource` in `functions/src/resource-manager.ts`, inside the `resource.canUpdate(claims)` branch, gate the update on an allowlist check when the new rules include an authenticated rule (matching the file's promise-chain style):
+
+```ts
+          if (resource.canUpdate(claims)) {
+            const {name, description, accessRules} = query;
+            const update: UpdateQuery = {};
+            if (name) update.name = name;
+            if (description) update.description = description;
+            if (accessRules) update.accessRules = accessRules;
+
+            // The "authenticated" rule opens the resource to every portal user, so adding it via
+            // PATCH is gated by the same per-tool allowlist as create-time rules.
+            const addsAuthenticatedRule = !!accessRules && accessRules.some(rule => rule.type === "authenticated");
+            const checkAuthenticatedAllowed = !addsAuthenticatedRule
+              ? Promise.resolve()
+              : getResourceSettings(db, env, resource.type, resource.tool)
+                  .then(settings => {
+                    if (!settings.allowedAccessRuleTypes || settings.allowedAccessRuleTypes.indexOf("authenticated") === -1) {
+                      return Promise.reject(`"authenticated" access rule type is not allowed by ${resource.tool} settings!`);
+                    }
+                    return;
+                  });
+
+            return checkAuthenticatedAllowed
+                    .then(() => docRef.update(update))
+                    .then(() => docRef.get())
+                    .then((updatedDocSnapshot) => fromDocumentSnapshot(updatedDocSnapshot))
+                    .then(resolve)
+                    .catch(reject)
+          }
+```
+
+**Step 4: Run the tests to verify they pass**
+
+Run: `cd functions && npm test -- src/index.test.ts`
+Expected: PASS (all tests in file).
+
+**Step 5: Commit**
+
+```bash
+git add functions/src/resource-manager.ts functions/src/index.test.ts
+git commit -m "feat: enforce allowedAccessRuleTypes when PATCHing authenticated rules"
+```
+
+---
+
+### Task 5c: Gate the `test` token shortcut to the emulator
+
+Code review found that `getClaimsFromJWT` returns hardcoded claims for the literal token `"test"` in every environment. Once a resource carries an `authenticated` rule, anyone sending `Bearer test` would get real AWS credentials from production. Decision: honor the shortcut only when running against the Firestore emulator.
+
+**Files:**
+- Modify: `functions/src/index.ts:112` (the `token === "test"` branch in `getClaimsFromJWT`)
+- Test: `functions/src/index.test.ts` (inside `describe("special 'test' token", ...)`)
+
+**Step 1: Write the failing test**
+
+Add inside the `special 'test' token` describe block:
+
+```ts
+    it("rejects the 'test' token when the Firestore emulator is not active", async () => {
+      const original = process.env.FIRESTORE_EMULATOR_HOST;
+      delete process.env.FIRESTORE_EMULATOR_HOST;
+      try {
+        // 403 is raised during auth, before any Firestore access.
+        const response = await supertest(app)
+          .get("/api/v1/resources/any-id")
+          .set("Authorization", "Bearer test")
+          .query({ env: "dev" })
+          .expect(403);
+        expect(response.text).toContain("jwt malformed");
+      } finally {
+        process.env.FIRESTORE_EMULATOR_HOST = original;
+      }
+    });
+```
+
+**Step 2: Run the test to verify it fails**
+
+Run: `cd functions && npm test -- src/index.test.ts`
+Expected: the new test FAILS (200 instead of 403 — the shortcut currently works everywhere).
+
+**Step 3: Write the minimal implementation**
+
+In `functions/src/index.ts`, change the `getClaimsFromJWT` condition:
+
+```ts
+const getClaimsFromJWT = (token: string): JWTClaims => {
+  // The "test" token shortcut is only honored when running against the Firestore emulator
+  // (local dev and tests). In deployed environments every token must verify against ADMIN_PUBLIC_KEY.
+  if (token === "test" && process.env.FIRESTORE_EMULATOR_HOST) {
+```
+
+(Everything else in the function unchanged.)
+
+**Step 4: Run the tests to verify they pass**
+
+Run: `cd functions && npm test -- src/index.test.ts`
+Expected: PASS — including the pre-existing `"returns test claims when token is 'test'"` test (the emulator host is set for test runs).
+
+**Step 5: Commit**
+
+```bash
+git add functions/src/index.ts functions/src/index.test.ts
+git commit -m "fix: honor 'test' token shortcut only when Firestore emulator is active"
 ```
 
 ---
