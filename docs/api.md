@@ -29,7 +29,7 @@ Required POST body parameters:
 - `description` - description of the resource
 - `type` - type of the resource, currently s3Folder or iotOrganization
 - `tool` - tool based on type of the resource, currently glossary, rubric or dataFlow
-- `accessRuleType` - user or context
+- `accessRuleType` - user, context, readWriteToken or authenticated (string or array of strings). The string forms `context` and `authenticated` automatically add a `user` owner rule so the creator keeps control; array forms are applied verbatim (an array without `user` creates a resource that can never be updated or deleted). `authenticated` grants credential access to any user with a valid portal JWT, must be enabled in the tool's `allowedAccessRuleTypes` settings, and applies to s3Folder resources only.
 - `accessRuleRole` - owner or member
 
 Returns a 201 status code with a single resource that was created.  Any errors are returned with a 400 status code.
@@ -43,6 +43,8 @@ Optional PATCH body parameters:
 - `accessRules` - an array of access rules
 - `bucket` - if the resource type is `s3Folder` then this updates the bucket
 - `folder` -if the resource type is `s3Folder` then this updates the folder
+
+Note: an `accessRules` array containing an `authenticated` rule is rejected unless the tool's `allowedAccessRuleTypes` settings include `authenticated`.
 
 Returns a 200 status code with a single resource that was updated.  Any errors are returned with a 400 status code.
 
