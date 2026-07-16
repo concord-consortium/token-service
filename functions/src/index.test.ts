@@ -163,6 +163,22 @@ describe("token-service app", () => {
       // which won't match the resource owner, so accessRules should not be included
       expect(json.result.id).toEqual(resource.id);
     });
+
+    it("rejects the 'test' token when the Firestore emulator is not active", async () => {
+      const original = process.env.FIRESTORE_EMULATOR_HOST;
+      delete process.env.FIRESTORE_EMULATOR_HOST;
+      try {
+        // 403 is raised during auth, before any Firestore access.
+        const response = await supertest(app)
+          .get("/api/v1/resources/any-id")
+          .set("Authorization", "Bearer test")
+          .query({ env: "dev" })
+          .expect(403);
+        expect(response.text).toContain("jwt malformed");
+      } finally {
+        process.env.FIRESTORE_EMULATOR_HOST = original;
+      }
+    });
   });
 
   describe("getValidatedConfig() error paths", () => {
