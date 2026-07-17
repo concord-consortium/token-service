@@ -809,7 +809,7 @@ describe("token-service app", () => {
       expect(await getResourcesCount()).toEqual(1);
     });
 
-    it("automatically adds 'user' access rule and requires JWT when 'authenticated' access rule is used", async () => {
+    it("rejects creating a resource with the 'authenticated' access rule (string form), even when allowlisted", async () => {
       const settings = await createS3Settings({
         allowedAccessRuleTypes: ["user", "readWriteToken", "context", "authenticated"]
       });
@@ -825,38 +825,17 @@ describe("token-service app", () => {
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
         .send(createQuery)
-        .expect(201);
+        .expect(400);
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual(`"authenticated" access rules cannot be created via the API; add them directly in Firestore`);
 
-      const json = checkResponse(response);
-      expect(json.result.accessRules.length).toEqual(2);
-      expect(json.result.accessRules[0]).toEqual({ type: "user", role: "owner", userId: user.userId, platformId: user.platformId } as UserAccessRule);
-      expect(json.result.accessRules[1]).toEqual({ type: "authenticated" } as AuthenticatedAccessRule);
-
-      expect(await getResourcesCount()).toEqual(1);
+      expect(await getResourcesCount()).toEqual(0);
     });
 
-    it("returns an error when creating authenticated resource without authentication", async () => {
+    it("rejects creating a resource with the 'authenticated' access rule (array form)", async () => {
       const settings = await createS3Settings({
         allowedAccessRuleTypes: ["user", "readWriteToken", "context", "authenticated"]
       });
-      const createQuery = {
-        type: settings.type,
-        tool: settings.tool,
-        name: "test.txt",
-        description: "desc"
-      };
-      const response = await supertest(app)
-        .post("/api/v1/resources")
-        .query({ env: "dev" })
-        .send(Object.assign({}, createQuery, { accessRuleType: "authenticated" }) as CreateQuery)
-        .expect(400);
-      const json = checkResponse(response, "error");
-      expect(json.error).toContain("JWT claims missing");
-    });
-
-    it("returns an error when 'authenticated' is not in allowedAccessRuleTypes", async () => {
-      // Default s3Settings fixture does NOT include "authenticated".
-      const settings = await createS3Settings();
       const createQuery = {
         type: settings.type,
         tool: settings.tool,
@@ -867,31 +846,11 @@ describe("token-service app", () => {
         .post("/api/v1/resources")
         .set("Authorization", `Bearer ${jwtToken}`)
         .query({ env: "dev" })
-        .send(Object.assign({}, createQuery, { accessRuleType: "authenticated" }) as CreateQuery)
+        .send(Object.assign({}, createQuery, { accessRuleType: ["user", "authenticated"] }) as CreateQuery)
         .expect(400);
       const json = checkResponse(response, "error");
-      expect(json.error).toEqual(`"authenticated" access rule type is not allowed by test-tool settings!`);
+      expect(json.error).toEqual(`"authenticated" access rules cannot be created via the API; add them directly in Firestore`);
 
-      expect(await getResourcesCount()).toEqual(0);
-    });
-
-    it("returns an error when creating authenticated resource anonymously with array form", async () => {
-      const settings = await createS3Settings({
-        allowedAccessRuleTypes: ["user", "readWriteToken", "context", "authenticated"]
-      });
-      const createQuery = {
-        type: settings.type,
-        tool: settings.tool,
-        name: "test.txt",
-        description: "desc"
-      };
-      const response = await supertest(app)
-        .post("/api/v1/resources")
-        .query({ env: "dev" })
-        .send(Object.assign({}, createQuery, { accessRuleType: ["authenticated"] }) as CreateQuery)
-        .expect(400);
-      const json = checkResponse(response, "error");
-      expect(json.error).toContain("JWT claims missing");
       expect(await getResourcesCount()).toEqual(0);
     });
 
@@ -1140,27 +1099,7 @@ describe("token-service app", () => {
       expect(await getFirstResource()).toEqual(expect.objectContaining(updateQuery));
     });
 
-    it("rejects adding an authenticated rule when tool settings don't allow it", async () => {
-      await createS3Settings(); // default allowlist has no "authenticated"
-      const resource = await createS3Resource();
-      const updateQuery: UpdateQuery = {
-        accessRules: [
-          {type: "user", role: "owner", platformId: user.platformId, userId: user.userId},
-          {type: "authenticated"} as AuthenticatedAccessRule
-        ]
-      };
-      const response = await supertest(app)
-        .patch("/api/v1/resources/" + resource.id)
-        .set("Authorization", `Bearer ${jwtToken}`)
-        .send(updateQuery)
-        .query({ env: "dev" })
-        .expect(400);
-      const json = checkResponse(response, "error");
-      expect(json.error).toEqual(`"authenticated" access rule type is not allowed by test-tool settings!`);
-      expect(await getFirstResource()).not.toEqual(expect.objectContaining(updateQuery));
-    });
-
-    it("allows adding an authenticated rule when tool settings allow it", async () => {
+    it("rejects adding an authenticated rule, even when tool settings allowlist it", async () => {
       await createS3Settings({
         allowedAccessRuleTypes: ["user", "readWriteToken", "context", "authenticated"]
       });
@@ -1176,29 +1115,9 @@ describe("token-service app", () => {
         .set("Authorization", `Bearer ${jwtToken}`)
         .send(updateQuery)
         .query({ env: "dev" })
-        .expect(200);
-      const json = checkResponse(response);
-      expect(json.result).toEqual(expect.objectContaining(updateQuery));
-      expect(await getFirstResource()).toEqual(expect.objectContaining(updateQuery));
-    });
-
-    it("rejects adding an authenticated rule when tool settings have no allowedAccessRuleTypes", async () => {
-      const { allowedAccessRuleTypes, ...invalidSettings } = s3Settings;
-      await createFullS3Settings(invalidSettings);
-      const resource = await createS3Resource();
-      const updateQuery: UpdateQuery = {
-        accessRules: [
-          {type: "user", role: "owner", platformId: user.platformId, userId: user.userId},
-          {type: "authenticated"} as AuthenticatedAccessRule
-        ]
-      };
-      const response = await supertest(app)
-        .patch("/api/v1/resources/" + resource.id)
-        .set("Authorization", `Bearer ${jwtToken}`)
-        .send(updateQuery)
-        .query({ env: "dev" })
         .expect(400);
-      checkResponse(response, "error");
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual(`"authenticated" access rules cannot be created via the API; add them directly in Firestore`);
       expect(await getFirstResource()).not.toEqual(expect.objectContaining(updateQuery));
     });
 

@@ -75,3 +75,13 @@ Owners of existing resources can add the rule via `PATCH /api/v1/resources/:id`,
 ## Rollout / ops
 
 Per environment, an admin adds `"authenticated"` to `allowedAccessRuleTypes` in the target tool's `resourceSettings` doc; the feature is inert until then — enforced on both resource creation and PATCH. Every credential grant is still scoped to the single resource's folder (`{folder}/{id}/`), but any portal user can write there — enable only for tools where shared write is intended.
+
+## Addendum (2026-07-16): API creation removed
+
+The create/PATCH paths described above were subsequently removed. `POST /resources` and
+`PATCH /resources/:id` now unconditionally reject any `authenticated` rule; the only way the
+rule exists on a resource is an admin adding `{ "type": "authenticated" }` to the resource
+document's `accessRules` directly in Firestore (choosing the doc id to match the desired
+`{folder}/{id}/` S3 path). The `allowedAccessRuleTypes` gating for `authenticated` was dropped
+with it — listing `"authenticated"` there is an inert no-op. The credential-granting side
+(`hasAuthenticatedRule()` / S3 `canCreateKeys`) is unchanged.

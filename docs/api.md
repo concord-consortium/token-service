@@ -29,7 +29,7 @@ Required POST body parameters:
 - `description` - description of the resource
 - `type` - type of the resource, currently s3Folder, iotOrganization or athenaWorkgroup
 - `tool` - tool based on type of the resource, e.g. glossary, rubric or dataFlow
-- `accessRuleType` - user, context, readWriteToken or authenticated (string or array of strings). The string forms `context` and `authenticated` automatically add a `user` owner rule so the creator keeps control; array forms are applied verbatim (an array without `user` creates a resource that can never be updated or deleted). `authenticated` grants credential access to any user with a valid portal JWT, must be enabled in the tool's `allowedAccessRuleTypes` settings, and applies to s3Folder resources only.
+- `accessRuleType` - user, context or readWriteToken (string or array of strings). The string form `context` automatically adds a `user` owner rule so the creator keeps control; array forms are applied verbatim (an array without `user` creates a resource that can never be updated or deleted). `authenticated` rules cannot be created via the API; they are added to a resource document directly in Firestore by an admin.
 - `accessRuleRole` - owner or member
 
 Returns a 201 status code with a single resource that was created.  Any errors are returned with a 400 status code.
@@ -42,7 +42,7 @@ Optional PATCH body parameters:
 - `description` - description of the resource
 - `accessRules` - an array of access rules
 
-Note: an `accessRules` array containing an `authenticated` rule is rejected unless the tool's `allowedAccessRuleTypes` settings include `authenticated`.
+Note: an `accessRules` array containing an `authenticated` rule is always rejected — `authenticated` rules cannot be set via the API and are added to the resource document directly in Firestore by an admin.
 
 Returns a 200 status code with a single resource that was updated.  Any errors are returned with a 400 status code.
 
