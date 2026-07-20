@@ -109,7 +109,9 @@ const getToken = (req: express.Request): string | undefined => {
 };
 
 const getClaimsFromJWT = (token: string): JWTClaims => {
-  if (token === "test") {
+  // The "test" token shortcut is only honored when running against the Firestore emulator
+  // (local dev and tests). In deployed environments every token must verify against ADMIN_PUBLIC_KEY.
+  if (token === "test" && process.env.FIRESTORE_EMULATOR_HOST) {
     return {
       user_id: "http://example.com/users/test",
       platform_user_id: "test",

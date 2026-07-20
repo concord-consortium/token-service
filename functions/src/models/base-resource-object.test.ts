@@ -100,6 +100,12 @@ const validReadWriteTokenRules: ReadWriteTokenAccessRule[] = [
   }
 ];
 
+const authenticatedAccessRules: AccessRule[] = [
+  {
+    type: "authenticated"
+  }
+];
+
 const invalidClaims: JWTClaims = {
   platform_id: "invalid-test-platform-id",
   platform_user_id: "invalid-1",
@@ -201,6 +207,16 @@ describe("Resource", () => {
       });
       it("should succeed when context access rule matches claims", () => {
         expect(createBaseResource(validContextAccessRules).isContextMember(validClaims)).toEqual(true);
+      });
+    });
+
+    describe("#hasAuthenticatedRule", () => {
+      it("should fail when no authenticated rule is present", () => {
+        expect(createBaseResource(validOwnerAccessRules).hasAuthenticatedRule()).toEqual(false);
+        expect(createBaseResource([]).hasAuthenticatedRule()).toEqual(false);
+      });
+      it("should succeed when an authenticated rule is present", () => {
+        expect(createBaseResource(authenticatedAccessRules).hasAuthenticatedRule()).toEqual(true);
       });
     });
 

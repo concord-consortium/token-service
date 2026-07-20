@@ -5,9 +5,8 @@ import { S3ResourceObject } from "./models/s3-resource-object";
 import { IotResourceObject } from "./models/iot-resource-object";
 import { AthenaResourceObject } from "./models/athena-resource-object";
 import {
-  ResourceType,
-  FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config,
-  AccessRule, UserAccessRule, ReadWriteTokenAccessRule, ReadWriteTokenPrefix, AccessRuleType, ContextAccessRule
+  ResourceType, FindAllQuery, CreateQuery, UpdateQuery, Credentials, Config, AccessRule, UserAccessRule,
+  ReadWriteTokenAccessRule, ReadWriteTokenPrefix, AccessRuleType, ContextAccessRule
 } from "./resource-types";
 import * as crypto from "crypto";
 
@@ -106,10 +105,15 @@ export const createResource = (db: FirebaseFirestore.Firestore, env: string, cla
 
         // query.accessRuleType is a string or array of strings
         const queryAccessRules: AccessRuleType[] =
-          // if accessRuleType is equal to context, automatically change it to "user" and "context", so the owner
-          // of the resource always have an access to it.
+          // if accessRuleType is equal to context, automatically add "user", so the owner
+          // of the resource always has access to it.
           query.accessRuleType === "context" ? [ "user", "context" ] :
           (typeof query.accessRuleType === "string" ? [ query.accessRuleType ] : query.accessRuleType);
+
+        if (queryAccessRules.includes("authenticated")) {
+          reject(`"authenticated" access rules cannot be created via the API; add them directly in Firestore`);
+          return;
+        }
 
         for (const accessRule of queryAccessRules) {
           if (!settings.allowedAccessRuleTypes) {
@@ -149,7 +153,7 @@ export const createResource = (db: FirebaseFirestore.Firestore, env: string, cla
             accessRules.push({type: "readWriteToken", readWriteToken} as ReadWriteTokenAccessRule);
           }
           else {
-            reject(`Unknown access rule type: ${accessRuleType}`);
+            reject(`Unknown access rule type: ${accessRule}`);
             return;
           }
         }
@@ -190,6 +194,11 @@ export const updateResource = (db: FirebaseFirestore.Firestore, env: string, cla
             if (name) update.name = name;
             if (description) update.description = description;
             if (accessRules) update.accessRules = accessRules;
+
+            if (accessRules && accessRules.some(rule => rule.type === "authenticated")) {
+              reject(`"authenticated" access rules cannot be created via the API; add them directly in Firestore`);
+              return;
+            }
 
             return docRef.update(update)
                     .then(() => docRef.get())

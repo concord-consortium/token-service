@@ -37,6 +37,12 @@ const validReadWriteTokenRules: ReadWriteTokenAccessRule[] = [
   }
 ];
 
+const authenticatedAccessRules: AccessRule[] = [
+  {
+    type: "authenticated"
+  }
+];
+
 const invalidClaims: JWTClaims = {
   platform_id: "invalid-test-platform-id",
   platform_user_id: "invalid-1",
@@ -93,6 +99,10 @@ describe("Resource", () => {
 
     it("should allow keys to be created with owner claims", () => {
       expect(createAthenaResource(validOwnerAccessRules).canCreateKeys(validClaims)).toEqual(true);
+    });
+
+    it("should not allow keys to be created with only an authenticated rule (S3-only feature)", () => {
+      expect(createAthenaResource(authenticatedAccessRules).canCreateKeys(validClaims)).toEqual(false);
     });
 
     it("should create keys", async () => {

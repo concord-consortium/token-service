@@ -58,6 +58,30 @@ The entry should look like this:
   domainIncludesFolder: true // optional, but it needs to be set when the domain points to S3 bucket folder, not just the root. It prevents token-service from appending folder to the path and URL again.
 ```
 
+### Creating authenticated (shared) resources
+
+A resource with an `authenticated` access rule grants temporary AWS credentials to any user
+with a valid portal JWT, so any portal user can write to the resource's S3 folder. These
+resources are never created through the API — `POST /resources` and `PATCH /resources/:id`
+reject `authenticated` rules unconditionally. Instead, an admin creates the resource document
+directly in Firestore (e.g. in `staging:resources`), choosing the document id so it maps to
+the desired S3 path (`{folder}/{id}/`), and includes the rule in `accessRules`:
+
+```javascript
+  type: "s3Folder",
+  tool: "example-app",
+  name: "shared-folder",
+  description: "World-writable shared folder",
+  accessRules: [
+    { "type": "authenticated" }
+  ]
+```
+
+Note that `authenticated` is special: unlike `user`, `context` and `readWriteToken` — where
+adding the type to a tool's `allowedAccessRuleTypes` is what enables API creation of resources
+with that rule — `authenticated` is never created through the API, so it does not belong in
+`allowedAccessRuleTypes` and listing it there has no effect.
+
 ### Creating new AthenaWorkgroupTools
 
 To Create a new Athena Workgroup Resource tool, create a resourceSettings document
@@ -87,6 +111,8 @@ The Service API uses [Firebase parameterized configuration](https://firebase.goo
 
 **Environment variables** (set in `functions/.env` for local dev, `functions/.env.<projectId>` for deployed environments):
 - `AWS_DURATION` — time in seconds that temporary credentials are valid (e.g., `3600`)
+
+Note: never set `FIRESTORE_EMULATOR_HOST` on deployed functions — besides breaking Firestore access, it re-enables the local-development-only `test` token shortcut.
 
 ## Development Setup
 

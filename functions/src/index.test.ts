@@ -6,7 +6,7 @@ import * as fs from "fs";
 import * as jwt from "jsonwebtoken";
 import * as supertest from "supertest";
 import { FireStoreS3Resource, FireStoreS3ResourceSettings, FireStoreIotOrganizationResource, JWTClaims } from "./firestore-types";
-import { CreateQuery, ReadWriteTokenPrefix, UpdateQuery, UserAccessRule, AccessRuleType, ContextAccessRule } from "./resource-types";
+import { CreateQuery, ReadWriteTokenPrefix, UpdateQuery, UserAccessRule, AccessRuleType, ContextAccessRule, AuthenticatedAccessRule } from "./resource-types";
 import { S3ResourceObject } from "./models/s3-resource-object";
 import { fakeAwsCredentials } from "./__mocks__/@aws-sdk/client-sts";
 // Set env vars before importing index (secrets are read via process.env at runtime).
@@ -162,6 +162,26 @@ describe("token-service app", () => {
       // The "test" token uses hardcoded claims with user_id "http://example.com/users/test"
       // which won't match the resource owner, so accessRules should not be included
       expect(json.result.id).toEqual(resource.id);
+    });
+
+    it("rejects the 'test' token when the Firestore emulator is not active", async () => {
+      const original = process.env.FIRESTORE_EMULATOR_HOST;
+      delete process.env.FIRESTORE_EMULATOR_HOST;
+      try {
+        // 403 is raised during auth, before any Firestore access.
+        const response = await supertest(app)
+          .get("/api/v1/resources/any-id")
+          .set("Authorization", "Bearer test")
+          .query({ env: "dev" })
+          .expect(403);
+        expect(response.text).toContain("jwt malformed");
+      } finally {
+        if (original === undefined) {
+          delete process.env.FIRESTORE_EMULATOR_HOST;
+        } else {
+          process.env.FIRESTORE_EMULATOR_HOST = original;
+        }
+      }
     });
   });
 
@@ -789,6 +809,51 @@ describe("token-service app", () => {
       expect(await getResourcesCount()).toEqual(1);
     });
 
+    it("rejects creating a resource with the 'authenticated' access rule (string form), even when allowlisted", async () => {
+      const settings = await createS3Settings({
+        allowedAccessRuleTypes: ["user", "readWriteToken", "context", "authenticated"]
+      });
+      const createQuery: CreateQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+        description: "desc",
+        accessRuleType: "authenticated"
+      };
+      const response = await supertest(app)
+        .post("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .send(createQuery)
+        .expect(400);
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual(`"authenticated" access rules cannot be created via the API; add them directly in Firestore`);
+
+      expect(await getResourcesCount()).toEqual(0);
+    });
+
+    it("rejects creating a resource with the 'authenticated' access rule (array form)", async () => {
+      const settings = await createS3Settings({
+        allowedAccessRuleTypes: ["user", "readWriteToken", "context", "authenticated"]
+      });
+      const createQuery = {
+        type: settings.type,
+        tool: settings.tool,
+        name: "test.txt",
+        description: "desc"
+      };
+      const response = await supertest(app)
+        .post("/api/v1/resources")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .send(Object.assign({}, createQuery, { accessRuleType: ["user", "authenticated"] }) as CreateQuery)
+        .expect(400);
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual(`"authenticated" access rules cannot be created via the API; add them directly in Firestore`);
+
+      expect(await getResourcesCount()).toEqual(0);
+    });
+
     it("returns an error if the resource is missing fields.", async () => {
       const settings = await createS3Settings();
 
@@ -1034,6 +1099,28 @@ describe("token-service app", () => {
       expect(await getFirstResource()).toEqual(expect.objectContaining(updateQuery));
     });
 
+    it("rejects adding an authenticated rule, even when tool settings allowlist it", async () => {
+      await createS3Settings({
+        allowedAccessRuleTypes: ["user", "readWriteToken", "context", "authenticated"]
+      });
+      const resource = await createS3Resource();
+      const updateQuery: UpdateQuery = {
+        accessRules: [
+          {type: "user", role: "owner", platformId: user.platformId, userId: user.userId},
+          {type: "authenticated"} as AuthenticatedAccessRule
+        ]
+      };
+      const response = await supertest(app)
+        .patch("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .send(updateQuery)
+        .query({ env: "dev" })
+        .expect(400);
+      const json = checkResponse(response, "error");
+      expect(json.error).toEqual(`"authenticated" access rules cannot be created via the API; add them directly in Firestore`);
+      expect(await getFirstResource()).not.toEqual(expect.objectContaining(updateQuery));
+    });
+
     it("returns error when a resource with that id doesn't exist", async () => {
       const updateQuery: UpdateQuery = { description: "new description" };
       const response = await supertest(app)
@@ -1115,6 +1202,50 @@ describe("token-service app", () => {
         sessionToken: fakeAwsCredentials.SessionToken,
         expiration: fakeAwsCredentials.Expiration
       });
+    });
+
+    it("returns credentials for any valid JWT when resource has an authenticated rule", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource({
+        accessRules: [
+          { type: "user", role: "owner", platformId: user.platformId, userId: "another-user-id" } as UserAccessRule,
+          { type: "authenticated" } as AuthenticatedAccessRule
+        ]
+      });
+      const response = await supertest(app)
+        .post("/api/v1/resources/" + resource.id + "/credentials")
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(200);
+      const json = checkResponse(response);
+      expect(json.result).toEqual({
+        accessKeyId: fakeAwsCredentials.AccessKeyId,
+        secretAccessKey: fakeAwsCredentials.SecretAccessKey,
+        sessionToken: fakeAwsCredentials.SessionToken,
+        expiration: fakeAwsCredentials.Expiration
+      });
+    });
+
+    it("does not allow update or delete for non-owners even with an authenticated rule", async () => {
+      await createS3Settings();
+      const resource = await createS3Resource({
+        accessRules: [
+          { type: "user", role: "owner", platformId: user.platformId, userId: "another-user-id" } as UserAccessRule,
+          { type: "authenticated" } as AuthenticatedAccessRule
+        ]
+      });
+      await supertest(app)
+        .patch("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .send({ description: "new description" })
+        .query({ env: "dev" })
+        .expect(400);
+      await supertest(app)
+        .delete("/api/v1/resources/" + resource.id)
+        .set("Authorization", `Bearer ${jwtToken}`)
+        .query({ env: "dev" })
+        .expect(400);
+      expect(await getResourcesCount()).toEqual(1);
     });
 
     it("returns credentials when user has access using target_user_id claim (JWT)", async () => {
